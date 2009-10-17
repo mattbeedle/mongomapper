@@ -10,6 +10,7 @@ module MongoMapper
         include Callbacks
         include Dirty
         include RailsCompatibility::Document
+        include NamedScope
         extend Validations::Macros
         extend ClassMethods
         extend Finders
@@ -45,6 +46,7 @@ module MongoMapper
       
       def find(*args)
         options = args.extract_options!
+        options.merge!(scope(:find)) if scope(:find)
         case args.first
           when :first then first(options)
           when :last  then last(options)
