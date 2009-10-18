@@ -80,6 +80,8 @@ module MongoMapper
         
         if finder.found?
           dynamic_find(finder, args)
+        elsif klass.scopes.include?(method)
+          klass.scopes[method].call(klass, *args)
         else
           super
         end
