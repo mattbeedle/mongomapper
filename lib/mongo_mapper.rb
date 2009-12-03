@@ -1,39 +1,46 @@
-require 'rubygems'
-
-gem 'activesupport', '>= 2.3'
-gem 'mongo', '0.15.1'
-gem 'jnunemaker-validatable', '1.7.4'
-
-require 'activesupport'
+require 'active_support'
 require 'mongo'
 require 'validatable'
 
 module MongoMapper
-  DocumentNotFound  = Class.new(StandardError)
-  DocumentNotValid  = Class.new(StandardError) do
+  # generic MM error
+  class MongoMapperError < StandardError; end
+  
+  # raised when key expected to exist but not found
+  class KeyNotFound < MongoMapperError; end
+  
+  # raised when document expected but not found
+  class DocumentNotFound < MongoMapperError; end
+  
+  # raised when document not valid and using !
+  class DocumentNotValid < MongoMapperError
     def initialize(document)
-      @document = document
-      super("Validation failed: #{@document.errors.full_messages.join(", ")}")
+      super("Validation failed: #{document.errors.full_messages.join(", ")}")
     end
   end
   
+  # @api public
   def self.connection
     @@connection ||= Mongo::Connection.new
   end
-
+  
+  # @api public
   def self.connection=(new_connection)
     @@connection = new_connection
   end
   
+  # @api public
   def self.logger
     connection.logger
   end
-
+  
+  # @api public
   def self.database=(name)
     @@database = nil
     @@database_name = name
   end
-
+  
+  # @api public
   def self.database
     if @@database_name.blank?
       raise 'You forgot to set the default database name: MongoMapper.database = "foobar"'
@@ -42,14 +49,17 @@ module MongoMapper
     @@database ||= MongoMapper.connection.db(@@database_name)
   end
   
+  # @api private
   def self.ensured_indexes
     @@ensured_indexes ||= []
   end
   
+  # @api private
   def self.ensure_index(klass, keys, options={})
     ensured_indexes << {:klass => klass, :keys => keys, :options => options}
   end
   
+  # @api public
   def self.ensure_indexes!
     ensured_indexes.each do |index|
       unique = index[:options].delete(:unique)
@@ -57,16 +67,16 @@ module MongoMapper
     end
   end
   
+  # @api private
   module Finders
     def dynamic_find(finder, args)
       attributes = {}
-      find_options = args.extract_options!.deep_merge(:conditions => attributes)
-
       finder.attributes.each_with_index do |attr, index|
         attributes[attr] = args[index]
       end
-
-      result = find(finder.finder, find_options)
+      
+      options = args.extract_options!.merge(attributes)
+      result  = find(finder.finder, options)
 
       if result.nil?
         if finder.bang
@@ -80,6 +90,20 @@ module MongoMapper
         result
       end
     end
+  end
+  
+  # @api private
+  def self.use_time_zone?
+    Time.respond_to?(:zone) && Time.zone ? true : false
+  end
+  
+  # @api private
+  def self.time_class
+    use_time_zone? ? Time.zone : Time
+  end
+  
+  def self.normalize_object_id(value)
+    value.is_a?(String) ? Mongo::ObjectID.from_string(value) : value
   end
 end
 

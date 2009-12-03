@@ -16,7 +16,7 @@ module MongoMapper
 
         extend Validations::Macros
 
-        key :_id, String
+        key :_id, ObjectId
         attr_accessor :_root_document
       end
     end
@@ -25,7 +25,7 @@ module MongoMapper
       def logger
         MongoMapper.logger
       end
-      
+
       def inherited(subclass)
         unless subclass.embeddable?
           subclass.set_collection_name(collection_name)
@@ -48,18 +48,22 @@ module MongoMapper
 
       def key(*args)
         key = Key.new(*args)
+        keys[key.name] = key
 
-        if keys[key.name].blank?
-          keys[key.name] = key
+        create_accessors_for(key)
+        create_key_in_subclasses(*args)
+        create_validations_for(key)
 
-          create_accessors_for(key)
-          create_key_in_subclasses(*args)
-          create_validations_for(key)
-          
-          key
-        end
-        
         key
+      end
+      
+      def using_object_id?
+        object_id_key?(:_id)
+      end
+      
+      def object_id_key?(name)
+        key = keys[name.to_s]
+        key && key.type == ObjectId
       end
 
       def embeddable?
@@ -83,13 +87,28 @@ module MongoMapper
         if instance_or_hash.is_a?(self)
           instance_or_hash
         else
-          new(instance_or_hash)
+          initialize_doc(instance_or_hash)
         end
       end
       
     private
+      def initialize_doc(doc)
+        begin
+          klass = doc['_type'].present? ? doc['_type'].constantize : self
+          klass.new(doc)
+        rescue NameError
+          new(doc)
+        end
+      end
+      
       def accessors_module
-        if const_defined?('MongoMapperKeys')
+        module_defined =  if method(:const_defined?).arity == 1 # Ruby 1.9 compat check
+                            const_defined?('MongoMapperKeys')
+                          else
+                            const_defined?('MongoMapperKeys', false)
+                          end
+
+        if module_defined
           const_get 'MongoMapperKeys'
         else
           const_set 'MongoMapperKeys', Module.new
@@ -185,22 +204,22 @@ module MongoMapper
           end
         end
 
-        if self.class.embeddable? 
+        if self.class.embeddable?
           if read_attribute(:_id).blank?
-            write_attribute :_id, Mongo::ObjectID.new.to_s
+            write_attribute :_id, Mongo::ObjectID.new
             @new_document = true
           else
             @new_document = false
           end
         end
       end
-      
+
       def new?
         !!@new_document
       end
       
       def to_param
-        id
+        id.to_s
       end
 
       def attributes=(attrs)
@@ -220,7 +239,6 @@ module MongoMapper
         attrs = HashWithIndifferentAccess.new
         
         embedded_keys.each do |key|
-          puts key.inspect
           attrs[key.name] = read_attribute(key.name).try(:attributes)
         end
         
@@ -270,7 +288,7 @@ module MongoMapper
       end
 
       def ==(other)
-        other.is_a?(self.class) && id == other.id
+        other.is_a?(self.class) && _id == other._id
       end
 
       def id
@@ -278,7 +296,12 @@ module MongoMapper
       end
 
       def id=(value)
-        @using_custom_id = true
+        if self.class.using_object_id?
+          value = MongoMapper.normalize_object_id(value)
+        else
+          @using_custom_id = true
+        end
+        
         write_attribute :_id, value
       end
 
@@ -332,9 +355,13 @@ module MongoMapper
         end
 
         def read_attribute(name)
-          value = _keys[name].get(instance_variable_get("@#{name}"))
-          instance_variable_set "@#{name}", value if !frozen?
-          value
+          if key = _keys[name]
+            value = key.get(instance_variable_get("@#{name}"))
+            instance_variable_set "@#{name}", value if !frozen?
+            value
+          else
+            raise KeyNotFound, "Could not find key: #{name.inspect}"
+          end
         end
 
         def read_attribute_before_typecast(name)
@@ -344,7 +371,7 @@ module MongoMapper
         def write_attribute(name, value)
           key = _keys[name]
           instance_variable_set "@#{name}_before_typecast", value
-          instance_variable_set "@#{name}", key.set(value)          
+          instance_variable_set "@#{name}", key.set(value)
         end
         
         def embedded_associations

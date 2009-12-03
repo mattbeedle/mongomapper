@@ -33,8 +33,13 @@ class AssociationBaseTest < Test::Unit::TestCase
   end
   
   context "klass" do
-    should "be class_name constantized" do
+    should "default to class_name constantized" do
       Base.new(:belongs_to, :foo_monster).klass.should == FooMonster
+    end
+    
+    should "be the specified class" do
+      anonnymous_class = Class.new
+      Base.new(:belongs_to, :foo_monster, :class => anonnymous_class).klass.should == anonnymous_class
     end
   end
   
@@ -45,6 +50,23 @@ class AssociationBaseTest < Test::Unit::TestCase
     
     should "be false if not many" do
       Base.new(:belongs_to, :foo).many?.should be_false
+    end
+  end
+  
+  context "finder_options" do
+    should "default to empty hash" do
+      base = Base.new(:many, :foos)
+      base.finder_options.should == {}
+    end
+    
+    should "work with order" do
+      base = Base.new(:many, :foos, :order => 'position')
+      base.finder_options.should == {:order => 'position'}
+    end
+    
+    should "correctly parse from options" do
+      base = Base.new(:many, :foos, :order => 'position', :somekey => 'somevalue')
+      base.finder_options.should == {:order => 'position', :somekey => 'somevalue'}
     end
   end
   

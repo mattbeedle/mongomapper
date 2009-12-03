@@ -49,9 +49,9 @@ module MongoMapper #:nodoc:
     #   # => {"id": 1, "name": "Konata Izumi", "age": 16,
     #         "created_at": "2006/08/01", "awesome": true,
     #         "permalink": "1-konata-izumi"}
-    def to_json(options = {})
+    def to_json(options={})
       apply_to_json_defaults(options)
-      
+
       if include_root_in_json
         "{#{self.class.json_class_name}: #{JsonSerializer.new(self, options).to_s}}"
       else
@@ -75,7 +75,7 @@ module MongoMapper #:nodoc:
         @json_class_name ||= name.demodulize.underscore.inspect
       end
     end
-    
+
     private
       def apply_to_json_defaults(options)
         unless options[:only]

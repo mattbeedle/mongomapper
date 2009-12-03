@@ -162,6 +162,29 @@ class SupportTest < Test::Unit::TestCase
     end
   end
   
+  context "ObjectId#to_mongo" do
+    should "return nil for nil" do
+      ObjectId.to_mongo(nil).should be_nil
+    end
+    
+    should "return value if object id" do
+      id = Mongo::ObjectID.new
+      ObjectId.to_mongo(id).should be(id)
+    end
+    
+    should "return object id if string" do
+      id = Mongo::ObjectID.new
+      ObjectId.to_mongo(id.to_s).should be(id)
+    end
+  end
+  
+  context "ObjectId#from_mongo" do
+    should "return value" do
+      id = Mongo::ObjectID.new
+      ObjectId.from_mongo(id).should == id
+    end
+  end
+  
   context "NilClass#to_mongo" do
     should "return nil" do
       nil.to_mongo(nil).should be_nil
@@ -187,6 +210,26 @@ class SupportTest < Test::Unit::TestCase
       Object.from_mongo(21).should == 21
       Object.from_mongo('21').should == '21'
       Object.from_mongo(9223372036854775807).should == 9223372036854775807
+    end
+  end
+  
+  context "Set#to_mongo" do
+    should "convert value to_a" do
+      Set.to_mongo(Set.new([1,2,3])).should == [1,2,3]
+    end
+
+    should "convert to empty array if nil" do
+      Set.to_mongo(nil).should == []
+    end
+  end
+
+  context "Set#from_mongo" do
+    should "be a set if array" do
+      Set.from_mongo([1,2,3]).should == Set.new([1,2,3])
+    end
+
+    should "be empty set if nil" do
+      Set.from_mongo(nil).should == Set.new([])
     end
   end
   
@@ -288,4 +331,12 @@ class SupportTest < Test::Unit::TestCase
       Time.zone = nil
     end
   end
+  
+  context "Mongo::ObjectID.to_json" do
+    should "convert object id to string" do
+      id = Mongo::ObjectID.new
+      id.to_json.should == id.to_s
+    end
+  end
+  
 end

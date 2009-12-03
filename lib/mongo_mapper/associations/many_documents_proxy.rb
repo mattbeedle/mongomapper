@@ -4,11 +4,16 @@ module MongoMapper
       delegate :klass, :to => :@association
       delegate :collection, :to => :klass
       
-      include MongoMapper::Finders
+      include ::MongoMapper::Finders
       
       def find(*args)
         options = args.extract_options!
         klass.find(*args << scoped_options(options))
+      end
+      
+      def find!(*args)
+        options = args.extract_options!
+        klass.find!(*args << scoped_options(options))
       end
 
       def paginate(options)
@@ -16,19 +21,19 @@ module MongoMapper
       end
 
       def all(options={})
-        find(:all, scoped_options(options))
+        klass.all(scoped_options(options))
       end
 
       def first(options={})
-        find(:first, scoped_options(options))
+        klass.first(scoped_options(options))
       end
 
       def last(options={})
-        find(:last, scoped_options(options))
+        klass.last(scoped_options(options))
       end
 
-      def count(conditions={})
-        klass.count(conditions.deep_merge(scoped_conditions))
+      def count(options={})
+        klass.count(scoped_options(options))
       end
 
       def replace(docs)
@@ -56,21 +61,27 @@ module MongoMapper
         apply_scope(doc).save
         doc
       end
+      
+      def create!(attrs={})
+        doc = klass.new(attrs)
+        apply_scope(doc).save!
+        doc
+      end
 
-      def destroy_all(conditions={})
-        all(:conditions => conditions).map(&:destroy)
+      def destroy_all(options={})
+        all(options).map(&:destroy)
         reset
       end
 
-      def delete_all(conditions={})
-        klass.delete_all(conditions.deep_merge(scoped_conditions))
+      def delete_all(options={})
+        klass.delete_all(options.merge(scoped_conditions))
         reset
       end
       
       def nullify
-        criteria = FinderOptions.to_mongo_criteria(scoped_conditions)
+        criteria = FinderOptions.new(klass, scoped_conditions).criteria
         all(criteria).each do |doc|
-          doc.update_attributes self.foreign_key => nil
+          doc.update_attributes(self.foreign_key => nil)
         end
         reset
       end
@@ -89,15 +100,15 @@ module MongoMapper
       
       protected
         def scoped_conditions
-          {self.foreign_key => @owner.id}
+          {self.foreign_key => @owner._id}
         end
-
+        
         def scoped_options(options)
-          options.deep_merge({:conditions => scoped_conditions})
+          @association.finder_options.merge(options).merge(scoped_conditions)
         end
 
         def find_target
-          find(:all)
+          all
         end
 
         def ensure_owner_saved
@@ -106,7 +117,7 @@ module MongoMapper
 
         def apply_scope(doc)
           ensure_owner_saved
-          doc.send("#{self.foreign_key}=", @owner.id)
+          doc.send("#{self.foreign_key}=", @owner._id)
           doc
         end
 

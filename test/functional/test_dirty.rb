@@ -8,10 +8,10 @@ class DirtyTest < Test::Unit::TestCase
       set_collection_name 'test'
       key :phrase, String
     end
-    @document.collection.clear
+    @document.collection.remove
     
-    Status.collection.clear
-    Project.collection.clear
+    Status.collection.remove
+    Project.collection.remove
   end
   
   context "marking changes" do
@@ -55,17 +55,17 @@ class DirtyTest < Test::Unit::TestCase
     should "not happen when loading from database" do
       doc = @document.create(:phrase => 'Foo')
       
-      from_db = @document.find(doc.id)
-      from_db.changed?.should be_false
+      doc = doc.reload
+      doc.changed?.should be_false
     end
     
     should "happen if changed after loading from database" do
       doc = @document.create(:phrase => 'Foo')
       
-      from_db = @document.find(doc.id)
-      from_db.changed?.should be_false
-      from_db.phrase = 'Bar'
-      from_db.changed?.should be_true
+      doc = doc.reload
+      doc.changed?.should be_false
+      doc.phrase = 'Bar'
+      doc.changed?.should be_true
     end
   end
   

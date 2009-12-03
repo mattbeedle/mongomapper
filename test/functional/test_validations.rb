@@ -8,7 +8,7 @@ class ValidationsTest < Test::Unit::TestCase
         set_collection_name 'test'
         key :name, String, :required => true
       end
-      @document.collection.clear
+      @document.collection.remove
     end
     
     should "not insert document" do
@@ -24,7 +24,24 @@ class ValidationsTest < Test::Unit::TestCase
       doc.errors.full_messages.should == ["Name can't be empty"]
     end
   end
-  
+
+  context "Skipping validations when saving" do
+    setup do
+      @document = Class.new do
+        include MongoMapper::Document
+        set_collection_name 'test'
+        key :name, String, :required => true
+      end
+      @document.collection.remove
+    end
+
+    should "insert document" do
+      doc = @document.new
+      doc.save(false)
+      @document.count.should == 1
+    end
+  end
+
   context "Saving a document that is invalid (destructive)" do
     setup do
       @document = Class.new do
@@ -32,7 +49,7 @@ class ValidationsTest < Test::Unit::TestCase
         set_collection_name 'test'
         key :name, String, :required => true
       end
-      @document.collection.clear
+      @document.collection.remove
     end
     
     should "raise error" do
@@ -48,7 +65,7 @@ class ValidationsTest < Test::Unit::TestCase
         set_collection_name 'test'
         key :name, String, :required => true
       end
-      @document.collection.clear
+      @document.collection.remove
     end
     
     should "raise error" do
@@ -68,7 +85,7 @@ class ValidationsTest < Test::Unit::TestCase
         set_collection_name 'test'
         key :name, String, :required => true
       end
-      @document.collection.clear
+      @document.collection.remove
       
       @doc = @document.create(:name => 'John Nunemaker')
     end
@@ -76,7 +93,7 @@ class ValidationsTest < Test::Unit::TestCase
     should "not update document" do
       @doc.name = nil
       @doc.save
-      @document.find(@doc.id).name.should == 'John Nunemaker'
+      @doc.reload.name.should == 'John Nunemaker'
     end
     
     should "populate document's errors" do
@@ -97,7 +114,7 @@ class ValidationsTest < Test::Unit::TestCase
           errors.add(:action, 'is invalid') if action.blank?
         end
       end
-      @document.collection.clear
+      @document.collection.remove
     end
     
     should "work with validate_on_create callback" do
@@ -140,7 +157,7 @@ class ValidationsTest < Test::Unit::TestCase
         key :name, String
         validates_uniqueness_of :name
       end
-      @document.collection.clear
+      @document.collection.remove
     end
 
     should "not fail if object is new" do
@@ -170,8 +187,8 @@ class ValidationsTest < Test::Unit::TestCase
       doc.save.should be_true
 
       @document \
-        .stubs(:find) \
-        .with(:first, :conditions => {:name => 'joe'}, :limit => 1) \
+        .stubs(:first) \
+        .with(:name => 'joe') \
         .returns(doc)
 
       doc.name = "joe"
@@ -184,14 +201,67 @@ class ValidationsTest < Test::Unit::TestCase
       doc.save.should be_true
 
       @document \
-        .stubs(:find) \
-        .with(:first, :conditions => {:name => 'joe'}, :limit => 1) \
+        .stubs(:first) \
+        .with(:name => 'joe') \
         .returns(doc)
 
       doc2 = @document.new("name" => "joe")
       doc2.should have_error_on(:name)
     end
     
+    should "allow multiple blank entries if :allow_blank => true" do
+      document = Class.new do
+        include MongoMapper::Document
+        set_collection_name 'test'
+        
+        key :name
+        validates_uniqueness_of :name, :allow_blank => :true
+      end
+      
+      doc = document.new("name" => "")
+      doc.save.should be_true
+
+      document \
+        .stubs(:first) \
+        .with(:name => '') \
+        .returns(doc)
+
+      doc2 = document.new("name" => "")
+      doc2.should_not have_error_on(:name)
+    end
+
+    should "allow entries that differ only in case by default" do
+      document = Class.new do
+        include MongoMapper::Document
+        set_collection_name 'test'
+
+        key :name
+        validates_uniqueness_of :name
+      end
+
+      doc = document.new("name" => "BLAMMO")
+      doc.save.should be_true
+
+      doc2 = document.new("name" => "blammo")
+      doc2.should_not have_error_on(:name)
+    end
+
+    should "fail on entries that differ only in case if :case_sensitive => false" do
+      document = Class.new do
+        include MongoMapper::Document
+        set_collection_name 'test'
+
+        key :name
+        validates_uniqueness_of :name, :case_sensitive => false
+      end
+
+      doc = document.new("name" => "BLAMMO")
+      doc.save.should be_true
+
+      doc2 = document.new("name" => "blammo")
+      doc2.should have_error_on(:name)
+    end
+
     context "scoped by a single attribute" do
       setup do
         @document = Class.new do
@@ -202,36 +272,36 @@ class ValidationsTest < Test::Unit::TestCase
           key :scope, String
           validates_uniqueness_of :name, :scope => :scope
         end
-        @document.collection.clear
+        @document.collection.remove
       end
-      
+
       should "fail if the same name exists in the scope" do
         doc = @document.new("name" => "joe", "scope" => "one")
         doc.save.should be_true
         
         @document \
-          .stubs(:find) \
-          .with(:first, :conditions => {:name => 'joe', :scope => "one"}, :limit => 1) \
+          .stubs(:first) \
+          .with(:name => 'joe', :scope => "one") \
           .returns(doc)
 
         doc2 = @document.new("name" => "joe", "scope" => "one")
         doc2.should have_error_on(:name)
       end
-      
+
       should "pass if the same name exists in a different scope" do
         doc = @document.new("name" => "joe", "scope" => "one")
         doc.save.should be_true
-        
+
         @document \
-          .stubs(:find) \
-          .with(:first, :conditions => {:name => 'joe', :scope => "two"}, :limit => 1) \
+          .stubs(:first) \
+          .with(:name => 'joe', :scope => 'two') \
           .returns(nil)
 
         doc2 = @document.new("name" => "joe", "scope" => "two")
         doc2.should_not have_error_on(:name)
       end
     end
-    
+
     context "scoped by a multiple attributes" do
       setup do
         @document = Class.new do
@@ -243,7 +313,7 @@ class ValidationsTest < Test::Unit::TestCase
           key :second_scope, String
           validates_uniqueness_of :name, :scope => [:first_scope, :second_scope]
         end
-        @document.collection.clear
+        @document.collection.remove
       end
       
       should "fail if the same name exists in the scope" do
@@ -251,8 +321,8 @@ class ValidationsTest < Test::Unit::TestCase
         doc.save.should be_true
         
         @document \
-          .stubs(:find) \
-          .with(:first, :conditions => {:name => 'joe', :first_scope => "one", :second_scope => "two"}, :limit => 1) \
+          .stubs(:first) \
+          .with(:name => 'joe', :first_scope => 'one', :second_scope => 'two') \
           .returns(doc)
 
         doc2 = @document.new("name" => "joe", "first_scope" => "one", "second_scope" => "two")
@@ -264,8 +334,8 @@ class ValidationsTest < Test::Unit::TestCase
         doc.save.should be_true
         
         @document \
-          .stubs(:find) \
-          .with(:first, :conditions => {:name => 'joe', :first_scope => "one", :second_scope => "one"}, :limit => 1) \
+          .stubs(:first) \
+          .with(:name => 'joe', :first_scope => 'one', :second_scope => 'one') \
           .returns(nil)
 
         doc2 = @document.new("name" => "joe", "first_scope" => "one", "second_scope" => "one")
@@ -282,14 +352,14 @@ class ValidationsTest < Test::Unit::TestCase
         
         key :name, String, :unique => true
       end
-      @document.collection.clear
+      @document.collection.remove
       
       doc = @document.create(:name => 'John')
       doc.should_not have_error_on(:name)
       
       @document \
-        .stubs(:find) \
-        .with(:first, :conditions => {:name => 'John'}, :limit => 1) \
+        .stubs(:first) \
+        .with(:name => 'John') \
         .returns(doc)
       
       second_john = @document.create(:name => 'John')

@@ -23,6 +23,11 @@ class WindowSize
   end
 end
 
+module AccountsExtensions
+  def inactive
+    all(:last_logged_in => nil)
+  end
+end
 
 class Post
   include MongoMapper::Document
@@ -30,7 +35,7 @@ class Post
   key :title, String
   key :body, String
 
-  has_many :comments, :as => :commentable, :class_name => 'PostComment'
+  many :comments, :as => :commentable, :class_name => 'PostComment'
 
   timestamps!
 end
@@ -41,7 +46,7 @@ class PostComment
   key :username, String, :default => 'Anonymous'
   key :body, String
 
-  key :commentable_id, String
+  key :commentable_id, ObjectId
   key :commentable_type, String
   belongs_to :commentable, :polymorphic => true
 
@@ -63,15 +68,9 @@ class Message
   key :body, String
   key :position, Integer
   key :_type, String
-  key :room_id, String
+  key :room_id, ObjectId
 
   belongs_to :room
-end
-
-class Answer
-  include MongoMapper::Document
-
-  key :body, String
 end
 
 class Enter < Message; end
@@ -82,24 +81,82 @@ class Room
   include MongoMapper::Document
 
   key :name, String
-  many :messages, :polymorphic => true
+  many :messages, :polymorphic => true, :order => 'position' do
+    def older
+      all(:position => {'$gt' => 5})
+    end
+  end
+  many :latest_messages, :class_name => 'Message', :order => 'position desc', :limit => 2
+  
+  many :accounts, :polymorphic => true, :extend => AccountsExtensions
+end
+
+class Account
+  include MongoMapper::Document
+  
+  key :_type, String
+  key :room_id, ObjectId
+  key :last_logged_in, Time
+  
+  belongs_to :room
+end
+class User < Account; end
+class Bot < Account; end
+
+class Answer
+  include MongoMapper::Document
+
+  key :body, String
+end
+
+module PeopleExtensions
+  def find_by_name(name)
+    detect { |p| p.name == name }
+  end
+end
+
+module CollaboratorsExtensions
+  def top
+    first
+  end
 end
 
 class Project
   include MongoMapper::Document
 
   key :name, String
-  many :statuses
-  many :addresses
+  
+  many :people, :extend => PeopleExtensions
+  many :collaborators, :extend => CollaboratorsExtensions
+  
+  many :statuses, :order => 'position' do
+    def open
+      all(:name => %w(New Assigned))
+    end
+  end
+  
+  many :addresses do
+    def find_all_by_state(state)
+      # can't use select here for some reason
+      find_all { |a| a.state == state }
+    end
+  end
+end
+
+class Collaborator
+  include MongoMapper::Document
+  key :project_id, ObjectId
+  key :name, String
+  belongs_to :project
 end
 
 class Status
   include MongoMapper::Document
 
-  key :project_id, String
-  key :target_id, String
+  key :project_id, ObjectId
+  key :target_id, ObjectId
   key :target_type, String
-  key :name, String
+  key :name, String, :required => true
   key :position, Integer
 
   belongs_to :project
@@ -109,9 +166,13 @@ end
 class RealPerson
   include MongoMapper::Document
 
-  many :pets
+  key :room_id, ObjectId
   key :name, String
-
+  
+  belongs_to :room
+  
+  many :pets
+  
   def realname=(n)
     self.name = n
   end
@@ -138,6 +199,8 @@ class Media
 
   key :_type, String
   key :file, String
+  
+  key :visible, Boolean
 end
 
 class Video < Media
@@ -155,8 +218,13 @@ end
 
 class Catalog
   include MongoMapper::Document
-
-  many :medias, :polymorphic => true
+  
+  many :medias, :polymorphic => true do
+    def visible
+      # for some reason we can't use select here
+      find_all { |m| m.visible? }
+    end
+  end
 end
 
 module TrModels
@@ -165,6 +233,7 @@ module TrModels
 
     key :_type, String
     key :license_plate, String
+    key :purchased_on, Date
   end
 
   class Car < TrModels::Transport
@@ -189,7 +258,14 @@ module TrModels
   class Fleet
     include MongoMapper::Document
 
-    many :transports, :polymorphic => true, :class_name => "TrModels::Transport"
+    module TransportsExtension
+      def to_be_replaced
+        # for some reason we can't use select
+        find_all { |t| t.purchased_on < 2.years.ago.to_date }
+      end
+    end
+    
+    many :transports, :polymorphic => true, :class_name => "TrModels::Transport", :extend => TransportsExtension
     key :name, String
   end
 end

@@ -3,7 +3,8 @@ require 'models'
 
 class ManyPolymorphicProxyTest < Test::Unit::TestCase
   def setup
-    Room.collection.clear
+    Room.collection.remove
+    Message.collection.remove
   end
   
   should "default reader to empty array" do
@@ -33,8 +34,8 @@ class ManyPolymorphicProxyTest < Test::Unit::TestCase
       ]
     }.should change { Message.count }.by(3)
     
-    from_db = Room.find(room.id)
-    messages = from_db.messages.all :order => "position"
+    room = room.reload
+    messages = room.messages.all :order => "position"
     messages.size.should == 3
     messages[0].body.should == 'John entered room'
     messages[1].body.should == 'Heyyyoooo!'
@@ -47,8 +48,8 @@ class ManyPolymorphicProxyTest < Test::Unit::TestCase
     room.messages.push    Exit.new(:body => 'John entered the room', :position => 2)
     room.messages.concat  Chat.new(:body => 'Holla!'             , :position => 3)
     
-    from_db = Room.find(room.id)
-    messages = from_db.messages.all :order => "position"
+    room = room.reload
+    messages = room.messages.all :order => "position"
     messages[0]._type.should == 'Enter'
     messages[1]._type.should == 'Exit'
     messages[2]._type.should == 'Chat'
@@ -58,7 +59,7 @@ class ManyPolymorphicProxyTest < Test::Unit::TestCase
     should "assign foreign key" do
       room = Room.create
       message = room.messages.build
-      message.room_id.should == room.id
+      message.room_id.should == room._id
     end
     
     should "assign _type" do
@@ -78,7 +79,7 @@ class ManyPolymorphicProxyTest < Test::Unit::TestCase
     should "assign foreign key" do
       room = Room.create
       message = room.messages.create
-      message.room_id.should == room.id
+      message.room_id.should == room._id
     end
     
     should "assign _type" do
@@ -181,7 +182,7 @@ class ManyPolymorphicProxyTest < Test::Unit::TestCase
       end
       
       should "work with conditions" do
-        messages = @lounge.messages.find(:all, :conditions => {:body => 'Loungin!'}, :order => "position")
+        messages = @lounge.messages.find(:all, :body => 'Loungin!', :order => "position")
         messages.should == [@lm1]
       end
       
@@ -197,7 +198,7 @@ class ManyPolymorphicProxyTest < Test::Unit::TestCase
       end
       
       should "work with conditions" do
-        messages = @lounge.messages.all(:conditions => {:body => 'Loungin!'}, :order => "position")
+        messages = @lounge.messages.all(:body => 'Loungin!', :order => "position")
         messages.should == [@lm1]
       end
       
@@ -213,7 +214,7 @@ class ManyPolymorphicProxyTest < Test::Unit::TestCase
       end
       
       should "work with conditions" do
-        message = @lounge.messages.find(:first, :conditions => {:body => 'I love loungin!'}, :order => "position asc")
+        message = @lounge.messages.find(:first, :body => 'I love loungin!', :order => "position asc")
         message.should == @lm2
       end
     end
@@ -224,7 +225,7 @@ class ManyPolymorphicProxyTest < Test::Unit::TestCase
       end
       
       should "work with conditions" do
-        message = @lounge.messages.first(:conditions => {:body => 'I love loungin!'}, :order => "position asc")
+        message = @lounge.messages.first(:body => 'I love loungin!', :order => "position asc")
         message.should == @lm2
       end
     end
@@ -235,7 +236,7 @@ class ManyPolymorphicProxyTest < Test::Unit::TestCase
       end
       
       should "work with conditions" do
-        message = @lounge.messages.find(:last, :conditions => {:body => 'Loungin!'}, :order => "position asc")
+        message = @lounge.messages.find(:last, :body => 'Loungin!', :order => "position asc")
         message.should == @lm1
       end
     end
@@ -246,32 +247,46 @@ class ManyPolymorphicProxyTest < Test::Unit::TestCase
       end
       
       should "work with conditions" do
-        message = @lounge.messages.last(:conditions => {:body => 'Loungin!'}, :order => "position asc")
+        message = @lounge.messages.last(:body => 'Loungin!', :order => "position asc")
         message.should == @lm1
       end
     end
     
     context "with one id" do
       should "work for id in association" do
-        @lounge.messages.find(@lm2.id).should == @lm2
+        @lounge.messages.find(@lm2._id).should == @lm2
       end
       
       should "not work for id not in association" do
         lambda {
-          @lounge.messages.find(@hm2.id)
+          @lounge.messages.find!(@hm2._id)
         }.should raise_error(MongoMapper::DocumentNotFound)
+      end
+    end
+    
+    context "with query options/criteria" do
+      should "work with order on association" do
+        @lounge.messages.should == [@lm1, @lm2]
+      end
+      
+      should "allow overriding the order provided to the association" do
+        @lounge.messages.all(:order => 'position desc').should == [@lm2, @lm1]
+      end
+      
+      should "allow using conditions on association" do
+        @hall.latest_messages.should == [@hm3, @hm2]
       end
     end
     
     context "with multiple ids" do
       should "work for ids in association" do
-        messages = @lounge.messages.find(@lm1.id, @lm2.id)
+        messages = @lounge.messages.find(@lm1._id, @lm2._id)
         messages.should == [@lm1, @lm2]
       end
       
       should "not work for ids not in association" do
         lambda {
-          @lounge.messages.find(@lm1.id, @lm2.id, @hm2.id)
+          @lounge.messages.find!(@lm1._id, @lm2._id, @hm2._id)
         }.should raise_error(MongoMapper::DocumentNotFound)
       end
     end
@@ -292,6 +307,33 @@ class ManyPolymorphicProxyTest < Test::Unit::TestCase
       should "return the subject" do
         @messages.should == [@hm1, @hm2]
       end
+    end
+  end
+  
+  context "extending the association" do
+    should "work using a block passed to many" do
+      room = Room.new(:name => "Amazing Room")
+      messages = room.messages = [
+        Enter.new(:body => 'John entered room',  :position => 3),
+        Chat.new(:body => 'Heyyyoooo!',          :position => 4),
+        Exit.new(:body => 'John exited room',    :position => 5),
+        Enter.new(:body => 'Steve entered room', :position => 6),
+        Chat.new(:body => 'Anyone there?',       :position => 7),
+        Exit.new(:body => 'Steve exited room',   :position => 8)
+      ]
+      room.save
+      room.messages.older.should == messages[3..5]
+    end
+  
+    should "work using many's :extend option" do
+      room = Room.new(:name => "Amazing Room")
+      accounts = room.accounts = [
+        Bot.new(:last_logged_in => 3.weeks.ago),
+        User.new(:last_logged_in => nil),
+        Bot.new(:last_logged_in => 1.week.ago)
+      ]
+      room.save
+      room.accounts.inactive.should == [accounts[1]]
     end
   end
 end

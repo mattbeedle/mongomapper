@@ -5,7 +5,7 @@ module MongoMapper #:nodoc:
     class Serializer #:nodoc:
       attr_reader :options
 
-      def initialize(record, options = {})
+      def initialize(record, options={})
         @record, @options = record, options.dup
       end
 
@@ -51,5 +51,4 @@ module MongoMapper #:nodoc:
   end
 end
 
-dir = Pathname(__FILE__).dirname.expand_path + 'serializers'
-require dir + 'json_serializer'
+require 'mongo_mapper/serializers/json_serializer'

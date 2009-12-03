@@ -3,8 +3,8 @@ require 'models'
 
 class ManyEmbeddedProxyTest < Test::Unit::TestCase
   def setup
-    Project.collection.clear
-    RealPerson.collection.clear
+    Project.collection.remove
+    RealPerson.collection.remove
   end
     
   should "default reader to empty array" do
@@ -17,13 +17,6 @@ class ManyEmbeddedProxyTest < Test::Unit::TestCase
     project.addresses.push Address.new
     project.addresses.size.should == 2
   end
-  
-  should "allow finding :all embedded documents" do
-    project = Project.new
-    project.addresses << Address.new
-    project.addresses << Address.new
-    project.save
-  end
 
   should "be embedded in document on save" do
     sb = Address.new(:city => 'South Bend', :state => 'IN')
@@ -33,10 +26,10 @@ class ManyEmbeddedProxyTest < Test::Unit::TestCase
     project.addresses << chi
     project.save
 
-    from_db = Project.find(project.id)
-    from_db.addresses.size.should == 2
-    from_db.addresses[0].should == sb
-    from_db.addresses[1].should == chi
+    project = project.reload
+    project.addresses.size.should == 2
+    project.addresses[0].should == sb
+    project.addresses[1].should == chi
   end
   
   should "allow embedding arbitrarily deep" do
@@ -45,7 +38,7 @@ class ManyEmbeddedProxyTest < Test::Unit::TestCase
       set_collection_name 'test'
       key :person, Person
     end
-    @document.collection.clear
+    @document.collection.remove
     
     meg = Person.new(:name => "Meg")
     meg.child = Person.new(:name => "Steve")
@@ -54,10 +47,10 @@ class ManyEmbeddedProxyTest < Test::Unit::TestCase
     doc = @document.new(:person => meg)
     doc.save
     
-    from_db = @document.find(doc.id)
-    from_db.person.name.should == 'Meg'
-    from_db.person.child.name.should == 'Steve'
-    from_db.person.child.child.name.should == 'Linda'
+    doc = doc.reload
+    doc.person.name.should == 'Meg'
+    doc.person.child.name.should == 'Steve'
+    doc.person.child.child.name.should == 'Linda'
   end
   
   should "allow assignment of 'many' embedded documents using a hash" do
@@ -77,12 +70,12 @@ class ManyEmbeddedProxyTest < Test::Unit::TestCase
     pet_lover.pets[1].species.should == "Siberian Husky"
     pet_lover.save.should be_true
     
-    from_db = RealPerson.find(pet_lover.id)
-    from_db.name.should == "Mr. Pet Lover"
-    from_db.pets[0].name.should == "Jimmy"
-    from_db.pets[0].species.should == "Cocker Spainel"
-    from_db.pets[1].name.should == "Sasha"
-    from_db.pets[1].species.should == "Siberian Husky"
+    pet_lover = pet_lover.reload
+    pet_lover.name.should == "Mr. Pet Lover"
+    pet_lover.pets[0].name.should == "Jimmy"
+    pet_lover.pets[0].species.should == "Cocker Spainel"
+    pet_lover.pets[1].name.should == "Sasha"
+    pet_lover.pets[1].species.should == "Siberian Husky"
   end
 
   context "embedding many embedded documents" do
@@ -92,7 +85,7 @@ class ManyEmbeddedProxyTest < Test::Unit::TestCase
         set_collection_name 'test'
         many :people
       end
-      @document.collection.clear
+      @document.collection.remove
     end
 
     should "persist all embedded documents" do
@@ -108,13 +101,13 @@ class ManyEmbeddedProxyTest < Test::Unit::TestCase
       doc.people << meg
       doc.save
 
-      from_db = @document.find(doc.id)
-      from_db.people.first.name.should == "Meg"
-      from_db.people.first.pets.should_not == []
-      from_db.people.first.pets.first.name.should == "Sparky"
-      from_db.people.first.pets.first.species.should == "Dog"
-      from_db.people.first.pets[1].name.should == "Koda"
-      from_db.people.first.pets[1].species.should == "Dog"
+      doc = doc.reload
+      doc.people.first.name.should == "Meg"
+      doc.people.first.pets.should_not == []
+      doc.people.first.pets.first.name.should == "Sparky"
+      doc.people.first.pets.first.species.should == "Dog"
+      doc.people.first.pets[1].name.should == "Koda"
+      doc.people.first.pets[1].species.should == "Dog"
     end
 
     should "create a reference to the root document for all embedded documents before save" do
@@ -130,45 +123,74 @@ class ManyEmbeddedProxyTest < Test::Unit::TestCase
       doc.people.first.pets.first._root_document.should == doc
     end
 
-    should "create properly-named reference to parent document when building off association proxy" do
-      person = RealPerson.new
-      pet = person.pets.build
-      person.should == pet.real_person
-    end
-
-
     should "create a reference to the root document for all embedded documents" do
-      meg = Person.new(:name => "Meg")
       sparky = Pet.new(:name => "Sparky", :species => "Dog")
-
+      meg = Person.new(:name => "Meg", :pets => [sparky])
       doc = @document.new
-
-      meg.pets << sparky
-
       doc.people << meg
       doc.save
 
-      from_db = @document.find(doc.id)
-      from_db.people.first._root_document.should == doc
-      from_db.people.first.pets.first._root_document.should == doc
+      doc = doc.reload
+      doc.people.first._root_document.should == doc
+      doc.people.first.pets.first._root_document.should == doc
     end
   end
   
-  should "allow retrieval via find(:all)" do
-    meg = Person.new(:name => "Meg")
+  should "allow finding by id" do
     sparky = Pet.new(:name => "Sparky", :species => "Dog")
-
-    meg.pets << sparky
+    meg    = Person.new(:name => "Meg", :pets => [sparky])
     
-    meg.pets.find(:all).should include(sparky)
+    meg.pets.find(sparky._id).should     == sparky  # oid
+    meg.pets.find(sparky.id.to_s).should == sparky  # string
   end
   
-  should "allow retrieval via find(id)" do
-    meg = Person.new(:name => "Meg")
-    sparky = Pet.new(:name => "Sparky", :species => "Dog")
-
-    meg.pets << sparky
+  context "extending the association" do
+    setup do
+      @address_class = Class.new do
+        include MongoMapper::EmbeddedDocument
+        key :address, String
+        key :city, String
+        key :state, String
+        key :zip, Integer
+      end
+      
+      @project_class = Class.new do
+        include MongoMapper::Document
+        key :name, String
+      end
+      
+      @project_class.collection.remove
+    end
     
-    meg.pets.find(sparky.id).should == sparky
+    should "work using a block passed to many" do
+      @project_class.many :addresses, :class => @address_class do
+        def find_all_by_state(state)
+          find_all { |a| a.state == state }
+        end
+      end
+      
+      addr1 = @address_class.new(:address => "Gate-3 Lankershim Blvd.", :city => "Universal City", :state => "CA", :zip => "91608")
+      addr2 = @address_class.new(:address => "3000 W. Alameda Ave.", :city => "Burbank", :state => "CA", :zip => "91523")
+      addr3 = @address_class.new(:address => "111 Some Ln", :city => "Nashville", :state => "TN", :zip => "37211")
+      project = @project_class.create(:name => "Some Project", :addresses => [addr1, addr2, addr3])
+      
+      project.addresses.find_all_by_state("CA").should == [addr1, addr2]
+    end
+  
+    should "work using many's :extend option" do
+      module FindByCity
+        def find_by_city(city)
+          find_all { |a| a.city == city }
+        end
+      end
+      @project_class.many :addresses, :class => @address_class, :extend => FindByCity
+      
+      addr1 = @address_class.new(:address => "Gate-3 Lankershim Blvd.", :city => "Universal City", :state => "CA", :zip => "91608")
+      addr2 = @address_class.new(:address => "3000 W. Alameda Ave.", :city => "Burbank", :state => "CA", :zip => "91523")
+      addr3 = @address_class.new(:address => "111 Some Ln", :city => "Nashville", :state => "TN", :zip => "37211")
+      project = @project_class.create(:name => "Some Project", :addresses => [addr1, addr2, addr3])
+      
+      project.addresses.find_by_city('Burbank').should == [addr2]
+    end
   end
 end

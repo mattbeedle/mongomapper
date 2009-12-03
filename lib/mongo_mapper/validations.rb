@@ -4,65 +4,37 @@ module MongoMapper
       def validates_uniqueness_of(*args)
         add_validations(args, MongoMapper::Validations::ValidatesUniquenessOf)
       end
-
-      def validates_exclusion_of(*args)
-        add_validations(args, MongoMapper::Validations::ValidatesExclusionOf)
-      end
-
-      def validates_inclusion_of(*args)
-        add_validations(args, MongoMapper::Validations::ValidatesInclusionOf)
-      end
     end
     
     class ValidatesUniquenessOf < Validatable::ValidationBase
-      option :scope
-      
+      option :scope, :case_sensitive
+      default :case_sensitive => true
+
       def valid?(instance)
-        doc = instance.class.find(:first, :conditions => {self.attribute => instance[attribute]}.merge(scope_conditions(instance)), :limit => 1)
-        doc.nil? || instance.id == doc.id
+        value = instance[attribute]
+        return true if allow_blank && value.blank?
+        base_conditions = case_sensitive ? {self.attribute => value} : {}
+        doc = instance.class.first(base_conditions.merge(scope_conditions(instance)).merge(where_conditions(instance)))
+        doc.nil? || instance._id == doc._id
       end
 
       def message(instance)
         super || "has already been taken"
       end
-      
+
       def scope_conditions(instance)
         return {} unless scope
         Array(scope).inject({}) do |conditions, key|
           conditions.merge(key => instance[key])
         end
       end
-    end
-    
-    class ValidatesExclusionOf < Validatable::ValidationBase
-      required_option :within
-      
-      def valid?(instance)
-        value = instance[attribute]
-        return true if allow_nil && value.nil?
-        return true if allow_blank && value.blank?
-        
-        !within.include?(instance[attribute])
-      end
-      
-      def message(instance)
-        super || "is reserved"
-      end
-    end
 
-    class ValidatesInclusionOf < Validatable::ValidationBase
-      required_option :within
-      
-      def valid?(instance)
-        value = instance[attribute]
-        return true if allow_nil && value.nil?
-        return true if allow_blank && value.blank?
-        
-        within.include?(value)
-      end
-      
-      def message(instance)
-        super || "is not in the list"
+      def where_conditions(instance)
+        conditions = {}
+        unless case_sensitive
+          conditions.merge!({'$where' => "this.#{attribute}.toLowerCase() == '#{instance[attribute].downcase}'"})
+        end
+        conditions
       end
     end
   end

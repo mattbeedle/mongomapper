@@ -49,6 +49,15 @@ class EmbeddedDocumentTest < Test::Unit::TestCase
       @klass.keys['_id'].should_not be_nil
     end
     
+    should "know it is using object id" do
+      @klass.using_object_id?.should be_true
+    end
+    
+    should "know it is not using object id if _id type is changed" do
+      @klass.key :_id, String
+      @klass.using_object_id?.should be_false
+    end
+    
     context "#to_mongo" do
       should "be nil if nil" do
         @klass.to_mongo(nil).should be_nil
@@ -76,6 +85,15 @@ class EmbeddedDocumentTest < Test::Unit::TestCase
         doc = @klass.from_mongo({:foo => 'bar'})
         doc.instance_of?(@klass).should be_true
         doc.foo.should == 'bar'
+      end
+    end
+  end
+  
+  context "looking up type constants" do
+    should "not raise an error" do
+      klass = Class.new do
+        include MongoMapper::EmbeddedDocument
+        key :file, Binary
       end
     end
   end
@@ -150,11 +168,11 @@ class EmbeddedDocumentTest < Test::Unit::TestCase
       @document.keys['age'].type.should == Integer
     end
     
-    should "not be redefinable" do
+    should "be redefinable" do
       @document.key(:foo, String)
       @document.keys['foo'].type.should == String
       @document.key(:foo, Integer)
-      @document.keys['foo'].type.should == String
+      @document.keys['foo'].type.should == Integer
     end
     
     should "create reader method" do
@@ -289,9 +307,10 @@ class EmbeddedDocumentTest < Test::Unit::TestCase
       end
     end
     
-    should "have to_param that is id" do
+    should "have to_param that is string representation of id" do
       doc = @document.new
-      doc.to_param.should == doc.id
+      doc.to_param.should == doc.id.to_s
+      doc.to_param.should be_instance_of(String)
     end
     
     should "have access to class logger" do
@@ -304,27 +323,47 @@ class EmbeddedDocumentTest < Test::Unit::TestCase
       @document.keys.keys.should include('_id')
     end
     
-    should "have id method that sets _id" do
-      doc = @document.new
-      doc.id.should == doc._id.to_s
+    should "have id method returns _id" do
+      id = Mongo::ObjectID.new
+      doc = @document.new(:_id => id)
+      doc.id.should == id
     end
-
-    should "have a nil _root_document" do
-      @document.new._root_document.should be_nil
+    
+    context "assigning id with _id ObjectId type" do
+      should "not set custom id flag" do
+        doc = @document.new
+        doc.using_custom_id?.should be_false
+        doc.id = Mongo::ObjectID.new
+        doc.using_custom_id?.should be_false
+      end
+      
+      should "convert string object id to mongo object id" do
+        id = Mongo::ObjectID.new
+        doc = @document.new(:id => id.to_s)
+        doc._id.should == id
+        doc.id.should == id
+        doc.using_custom_id?.should be_false
+      end
     end
 
     context "setting custom id" do
       should "set _id" do
+        @document.key :_id, String
         doc = @document.new(:id => '1234')
         doc._id.should == '1234'
       end
       
       should "know that custom id is set" do
+        @document.key :_id, String
         doc = @document.new
         doc.using_custom_id?.should be_false
         doc.id = '1234'
         doc.using_custom_id?.should be_true
       end
+    end
+
+    should "have a nil _root_document" do
+      @document.new._root_document.should be_nil
     end
 
     context "being initialized" do
@@ -465,11 +504,20 @@ class EmbeddedDocumentTest < Test::Unit::TestCase
         clone.age.should == 27
       end
     end
-
+    
     context "key shorcut access" do
-      should "be able to read key with []" do
-        doc = @document.new(:name => 'string')
-        doc[:name].should == 'string'
+      context "[]" do
+        should "work when key found" do
+          doc = @document.new(:name => 'string')
+          doc[:name].should == 'string'
+        end
+        
+        should "raise exception when key not found" do
+          doc = @document.new(:name => 'string')
+          lambda {
+            doc[:not_here]
+          }.should raise_error(MongoMapper::KeyNotFound)
+        end
       end
       
       context "[]=" do
@@ -647,12 +695,15 @@ class EmbeddedDocumentTest < Test::Unit::TestCase
     end
     
     context "equality" do
+      setup do
+        @oid = Mongo::ObjectID.new
+      end
       should "be equal if id and class are the same" do
-        (@document.new('_id' => 1) == @document.new('_id' => 1)).should be(true)
+        (@document.new('_id' => @oid) == @document.new('_id' => @oid)).should be(true)
       end
 
       should "not be equal if class same but id different" do
-        (@document.new('_id' => 1) == @document.new('_id' => 2)).should be(false)
+        (@document.new('_id' => @oid) == @document.new('_id' => Mongo::ObjectID.new)).should be(false)
       end
 
       should "not be equal if id same but class different" do
@@ -660,7 +711,7 @@ class EmbeddedDocumentTest < Test::Unit::TestCase
           include MongoMapper::Document
         end
 
-        (@document.new('_id' => 1) == @another_document.new('_id' => 1)).should be(false)
+        (@document.new('_id' => @oid) == @another_document.new('_id' => @oid)).should be(false)
       end
     end
   end # instance of a embedded document

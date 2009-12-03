@@ -1,9 +1,12 @@
+require 'set'
+
 class BasicObject #:nodoc:
-  instance_methods.each { |m| undef_method m unless m =~ /(^__|^nil\?$|^send$|^methods$|instance_eval|proxy_|^object_id$)/ }
+  instance_methods.each { |m| undef_method m unless m =~ /(^__|instance_eval)/ }
 end unless defined?(BasicObject)
 
 class Array
   def self.to_mongo(value)
+    value = value.respond_to?(:lines) ? value.lines : value
     value.to_a
   end
   
@@ -20,7 +23,7 @@ class Binary
       value.nil? ? nil : ByteBuffer.new(value)
     end
   end
-  
+
   def self.from_mongo(value)
     value
   end
@@ -34,7 +37,7 @@ class Boolean
       ['true', 't', '1'].include?(value.to_s.downcase)
     end
   end
-  
+
   def self.from_mongo(value)
     !!value
   end
@@ -119,6 +122,32 @@ class Object
   end
 end
 
+class ObjectId
+  def self.to_mongo(value)
+    if value.nil?
+      nil
+    elsif value.is_a?(Mongo::ObjectID)
+      value
+    else
+      Mongo::ObjectID.from_string(value.to_s)
+    end
+  end
+  
+  def self.from_mongo(value)
+    value
+  end
+end
+
+class Set
+  def self.to_mongo(value)
+    value.to_a
+  end
+  
+  def self.from_mongo(value)
+    Set.new(value || [])
+  end
+end
+
 class String
   def self.to_mongo(value)
     value.nil? ? nil : value.to_s
@@ -129,33 +158,36 @@ class String
   end
 end
 
-class Time
+class Symbol
+  %w{gt lt gte lte ne in nin mod size where exists}.each do |operator|
+    define_method operator do
+      MongoMapper::FinderOperator.new(self, "$#{operator}")
+    end
+  end
+end
+
+class Time  
   def self.to_mongo(value)
     if value.nil? || value == ''
       nil
     else
-      to_utc_time(value)
+      time = MongoMapper.time_class.parse(value.to_s)
+      time && time.utc
     end
   end
   
   def self.from_mongo(value)
-    if Time.respond_to?(:zone) && Time.zone && value.present?
+    if MongoMapper.use_time_zone? && value.present?
       value.in_time_zone(Time.zone)
     else
       value
     end
   end
-  
-  def self.to_utc_time(value)
-    to_local_time(value).try(:utc)
-  end
-  
-  # make sure we have a time and that it is local
-  def self.to_local_time(value)
-    if Time.respond_to?(:zone) && Time.zone
-      Time.zone.parse(value.to_s)
-    else
-      Time.parse(value.to_s)
-    end
+end
+
+# TODO: Remove when patch accepted into driver
+class Mongo::ObjectID
+  def to_json(options = nil)
+    to_s
   end
 end

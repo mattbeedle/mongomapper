@@ -8,7 +8,7 @@ class DocumentTest < Test::Unit::TestCase
         include MongoMapper::Document
         set_collection_name 'test'
       end
-      @document.collection.clear
+      @document.collection.remove
     end
     
     should "have logger method" do
@@ -36,8 +36,9 @@ class DocumentTest < Test::Unit::TestCase
     end
 
     should "allow setting a different database without affecting the default" do
-      @document.database AlternateDatabase
-      @document.database.name.should == AlternateDatabase
+      @document.set_database_name 'test2'
+      @document.database_name.should == 'test2'
+      @document.database.name.should == 'test2'
 
       another_document = Class.new do
         include MongoMapper::Document
@@ -47,12 +48,23 @@ class DocumentTest < Test::Unit::TestCase
     end
     
     should "default collection name to class name tableized" do
-      class Item
+      class ::Item
         include MongoMapper::Document
       end
       
       Item.collection.should be_instance_of(Mongo::Collection)
       Item.collection.name.should == 'items'
+    end
+    
+    should "default collection name of namespaced class to tableized with dot separation" do
+      module ::BloggyPoo
+        class Post
+          include MongoMapper::Document
+        end
+      end
+
+      BloggyPoo::Post.collection.should be_instance_of(Mongo::Collection)
+      BloggyPoo::Post.collection.name.should == 'bloggy_poo.posts'
     end
 
     should "allow setting the collection name" do
@@ -91,7 +103,7 @@ class DocumentTest < Test::Unit::TestCase
         key :name, String
         key :age, Integer
       end
-      @document.collection.clear
+      @document.collection.remove
     end
     
     should "have access to logger" do
@@ -102,7 +114,7 @@ class DocumentTest < Test::Unit::TestCase
 
     should "have access to the class's collection" do
       doc = @document.new
-      doc.collection.should == @document.collection
+      doc.collection.name.should == @document.collection.name
     end
 
     should "use default values if defined for keys" do
@@ -124,13 +136,18 @@ class DocumentTest < Test::Unit::TestCase
         @document.new._root_document.should be_nil
       end
 
-      should "set self to the root document on embedded documents" do
-        document = Class.new(RealPerson) do
-          many :pets
+      should "set self to the root document on embedded documents" do        
+        klass = Class.new do
+          include MongoMapper::Document
         end
-
-        doc = document.new 'pets' => [{}]
-        doc.pets.first._root_document.should == doc
+        
+        pets = Class.new do
+          include MongoMapper::EmbeddedDocument
+        end
+        klass.many :pets, :class => pets
+        
+        doc = klass.new(:pets => [{}])
+        doc.pets.first._root_document.should == doc        
       end
     end
 
@@ -140,6 +157,7 @@ class DocumentTest < Test::Unit::TestCase
       end
       
       should "be true if id but using custom id and not saved yet" do
+        @document.key :_id, String
         doc = @document.new
         doc.id = '1234'
         doc.new?.should be_true
@@ -161,14 +179,16 @@ class DocumentTest < Test::Unit::TestCase
       end
     end
 
-    
     context "equality" do
+      setup do
+        @oid = Mongo::ObjectID.new
+      end
       should "be equal if id and class are the same" do
-        (@document.new('_id' => 1) == @document.new('_id' => 1)).should be(true)
+        (@document.new('_id' => @oid) == @document.new('_id' => @oid)).should be(true)
       end
 
       should "not be equal if class same but id different" do
-        (@document.new('_id' => 1) == @document.new('_id' => 2)).should be(false)
+        (@document.new('_id' => @oid) == @document.new('_id' => Mongo::ObjectID.new)).should be(false)
       end
 
       should "not be equal if id same but class different" do
@@ -177,7 +197,7 @@ class DocumentTest < Test::Unit::TestCase
           set_collection_name 'test'
         end
 
-        (@document.new('_id' => 1) == @another_document.new('_id' => 1)).should be(false)
+        (@document.new('_id' => @oid) == @another_document.new('_id' => @oid)).should be(false)
       end
     end
   end # instance of a document

@@ -3,8 +3,8 @@ require 'models'
 
 class ManyProxyTest < Test::Unit::TestCase
   def setup
-    Project.collection.clear
-    Status.collection.clear
+    Project.collection.remove
+    Status.collection.remove
   end
   
   should "default reader to empty array" do
@@ -14,9 +14,9 @@ class ManyProxyTest < Test::Unit::TestCase
 
   should "allow adding to association like it was an array" do
     project = Project.new
-    project.statuses <<     Status.new
-    project.statuses.push   Status.new
-    project.statuses.concat Status.new
+    project.statuses <<     Status.new(:name => 'Foo1!')
+    project.statuses.push   Status.new(:name => 'Foo2!')
+    project.statuses.concat Status.new(:name => 'Foo3!')
     project.statuses.size.should == 3
   end
 
@@ -25,9 +25,9 @@ class ManyProxyTest < Test::Unit::TestCase
     project.statuses = [Status.new("name" => "ready")]
     project.save.should be_true
 
-    from_db = Project.find(project.id)
-    from_db.statuses.size.should == 1
-    from_db.statuses[0].name.should == "ready"
+    project = project.reload
+    project.statuses.size.should == 1
+    project.statuses[0].name.should == "ready"
   end
   
   should "correctly assign foreign key when using <<, push and concat" do
@@ -36,17 +36,17 @@ class ManyProxyTest < Test::Unit::TestCase
     project.statuses.push   Status.new(:name => 'push')
     project.statuses.concat Status.new(:name => 'concat')
     
-    from_db = Project.find(project.id)
-    from_db.statuses[0].project_id.should == project.id
-    from_db.statuses[1].project_id.should == project.id
-    from_db.statuses[2].project_id.should == project.id
+    project = project.reload
+    project.statuses[0].project_id.should == project._id
+    project.statuses[1].project_id.should == project._id
+    project.statuses[2].project_id.should == project._id
   end
   
   context "build" do
     should "assign foreign key" do
       project = Project.create
       status = project.statuses.build
-      status.project_id.should == project.id
+      status.project_id.should == project._id
     end
 
     should "allow assigning attributes" do
@@ -59,14 +59,14 @@ class ManyProxyTest < Test::Unit::TestCase
   context "create" do
     should "assign foreign key" do
       project = Project.create
-      status = project.statuses.create
-      status.project_id.should == project.id
+      status = project.statuses.create(:name => 'Foo!')
+      status.project_id.should == project._id
     end
     
     should "save record" do
       project = Project.create
       lambda {
-        project.statuses.create
+        project.statuses.create(:name => 'Foo!')
       }.should change { Status.count }
     end
     
@@ -77,13 +77,41 @@ class ManyProxyTest < Test::Unit::TestCase
     end
   end
   
+  context "create!" do
+    should "assign foreign key" do
+      project = Project.create
+      status = project.statuses.create!(:name => 'Foo!')
+      status.project_id.should == project._id
+    end
+    
+    should "save record" do
+      project = Project.create
+      lambda {
+        project.statuses.create!(:name => 'Foo!')
+      }.should change { Status.count }
+    end
+    
+    should "allow passing attributes" do
+      project = Project.create
+      status = project.statuses.create!(:name => 'Foo!')
+      status.name.should == 'Foo!'
+    end
+    
+    should "raise exception if not valid" do
+      project = Project.create
+      lambda {
+        project.statuses.create!(:name => nil)
+      }.should raise_error(MongoMapper::DocumentNotValid)
+    end
+  end
+  
   context "count" do
     should "work scoped to association" do
       project = Project.create
-      3.times { project.statuses.create }
+      3.times { project.statuses.create(:name => 'Foo!') }
       
       other_project = Project.create
-      2.times { other_project.statuses.create }
+      2.times { other_project.statuses.create(:name => 'Foo!') }
       
       project.statuses.count.should == 3
       other_project.statuses.count.should == 2
@@ -215,7 +243,7 @@ class ManyProxyTest < Test::Unit::TestCase
       end
       
       should "work with conditions" do
-        statuses = @project1.statuses.find(:all, :conditions => {'name' => 'Complete'})
+        statuses = @project1.statuses.find(:all, :name => 'Complete')
         statuses.should == [@complete]
       end
       
@@ -231,7 +259,7 @@ class ManyProxyTest < Test::Unit::TestCase
       end
       
       should "work with conditions" do
-        statuses = @project1.statuses.all(:conditions => {'name' => 'Complete'})
+        statuses = @project1.statuses.all(:name => 'Complete')
         statuses.should == [@complete]
       end
       
@@ -247,7 +275,7 @@ class ManyProxyTest < Test::Unit::TestCase
       end
       
       should "work with conditions" do
-        status = @project1.statuses.find(:first, :conditions => {:name => 'Complete'})
+        status = @project1.statuses.find(:first, :name => 'Complete')
         status.should == @complete
       end
     end
@@ -258,7 +286,7 @@ class ManyProxyTest < Test::Unit::TestCase
       end
       
       should "work with conditions" do
-        status = @project1.statuses.first(:conditions => {:name => 'Complete'})
+        status = @project1.statuses.first(:name => 'Complete')
         status.should == @complete
       end
     end
@@ -269,7 +297,7 @@ class ManyProxyTest < Test::Unit::TestCase
       end
       
       should "work with conditions" do
-        status = @project1.statuses.find(:last, :order => 'position', :conditions => {:name => 'New'})
+        status = @project1.statuses.find(:last, :order => 'position', :name => 'New')
         status.should == @brand_new
       end
     end
@@ -280,32 +308,32 @@ class ManyProxyTest < Test::Unit::TestCase
       end
       
       should "work with conditions" do
-        status = @project1.statuses.last(:order => 'position', :conditions => {:name => 'New'})
+        status = @project1.statuses.last(:order => 'position', :name => 'New')
         status.should == @brand_new
       end
     end
     
     context "with one id" do
       should "work for id in association" do
-        @project1.statuses.find(@complete.id).should == @complete
+        @project1.statuses.find(@complete._id).should == @complete
       end
       
       should "not work for id not in association" do
         lambda {
-          @project1.statuses.find(@archived.id)
+          @project1.statuses.find!(@archived._id)
         }.should raise_error(MongoMapper::DocumentNotFound)
       end
     end
     
     context "with multiple ids" do
       should "work for ids in association" do
-        statuses = @project1.statuses.find(@brand_new.id, @complete.id)
+        statuses = @project1.statuses.find(@brand_new._id, @complete._id)
         statuses.should == [@brand_new, @complete]
       end
       
       should "not work for ids not in association" do
         lambda {
-          @project1.statuses.find(@brand_new.id, @complete.id, @archived.id)
+          @project1.statuses.find!(@brand_new._id, @complete._id, @archived._id)
         }.should raise_error(MongoMapper::DocumentNotFound)
       end
     end
@@ -326,6 +354,31 @@ class ManyProxyTest < Test::Unit::TestCase
       should "return the subject" do
         @statuses.collect(&:name).should == %w(Archived Complete)
       end
+    end
+  end
+
+  context "extending the association" do
+    should "work using a block passed to many" do
+      project = Project.new(:name => "Some Project")
+      status1 = Status.new(:name => "New")
+      status2 = Status.new(:name => "Assigned")
+      status3 = Status.new(:name => "Closed")
+      project.statuses = [status1, status2, status3]
+      project.save
+      
+      open_statuses = project.statuses.open
+      open_statuses.should include(status1)
+      open_statuses.should include(status2)
+      open_statuses.should_not include(status3)
+    end
+  
+    should "work using many's :extend option" do
+      project = Project.new(:name => "Some Project")
+      collaborator1 = Collaborator.new(:name => "zing")
+      collaborator2 = Collaborator.new(:name => "zang")
+      project.collaborators = [collaborator1, collaborator2]
+      project.save
+      project.collaborators.top.should == collaborator1
     end
   end
 end

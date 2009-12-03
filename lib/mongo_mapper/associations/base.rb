@@ -1,10 +1,27 @@
 module MongoMapper
   module Associations
+    # Base class for keeping track of associations.
+    #
+    # @private
     class Base
-      attr_reader :type, :name, :options
+      attr_reader :type, :name, :options, :finder_options
 
-      def initialize(type, name, options = {})
-        @type, @name, @options = type, name, options
+      # Options that should not be considered MongoDB query options/criteria
+      AssociationOptions = [:as, :class, :class_name, :dependent, :extend, :foreign_key, :polymorphic]
+
+      def initialize(type, name, options={}, &extension)
+        @type, @name, @options, @finder_options = type, name, {}, {}
+        options.symbolize_keys!
+
+        options[:extend] = modulized_extensions(extension, options[:extend])
+
+        options.each_pair do |key, value|
+          if AssociationOptions.include?(key)
+            @options[key] = value
+          else
+            @finder_options[key] = value
+          end
+        end
       end
 
       def class_name
@@ -20,7 +37,7 @@ module MongoMapper
       end
 
       def klass
-        @klass ||= class_name.constantize
+        @klass ||= options[:class] || class_name.constantize
       end
 
       def many?
@@ -78,6 +95,16 @@ module MongoMapper
           end
         end # end begin
       end # end proxy_class
+
+      private
+
+        # @param [Array<Module, Proc>] extensions a collection of Modules or 
+        #   Procs that extend the behaviour of this association.
+        def modulized_extensions(*extensions)
+          extensions.flatten.compact.map do |extension|
+            Proc === extension ? Module.new(&extension) : extension
+          end
+        end
     end
   end
 end
