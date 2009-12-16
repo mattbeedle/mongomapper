@@ -1,3 +1,13 @@
+# if Gem is defined i'll assume you are using rubygems and lock specific versions
+# call me crazy but a plain old require will just get the latest version you have installed
+# so i want to make sure that if you are using gems you do in fact have the correct versions
+# if there is a better way to do this, please enlighten me!
+if self.class.const_defined?(:Gem)
+  gem 'activesupport', '>= 2.3'
+  gem 'mongo', '0.18.1'
+  gem 'jnunemaker-validatable', '1.8.1'
+end
+
 require 'active_support'
 require 'mongo'
 require 'validatable'
@@ -68,31 +78,6 @@ module MongoMapper
   end
   
   # @api private
-  module Finders
-    def dynamic_find(finder, args)
-      attributes = {}
-      finder.attributes.each_with_index do |attr, index|
-        attributes[attr] = args[index]
-      end
-      
-      options = args.extract_options!.merge(attributes)
-      result  = find(finder.finder, options)
-
-      if result.nil?
-        if finder.bang
-          raise DocumentNotFound, "Couldn't find Document with #{attributes.inspect} in collection named #{collection.name}"
-        end
-
-        if finder.instantiator
-          self.send(finder.instantiator, attributes)
-        end
-      else
-        result
-      end
-    end
-  end
-  
-  # @api private
   def self.use_time_zone?
     Time.respond_to?(:zone) && Time.zone ? true : false
   end
@@ -102,23 +87,13 @@ module MongoMapper
     use_time_zone? ? Time.zone : Time
   end
   
+  # @api private
   def self.normalize_object_id(value)
     value.is_a?(String) ? Mongo::ObjectID.from_string(value) : value
   end
 end
 
 require 'mongo_mapper/support'
-require 'mongo_mapper/associations'
-require 'mongo_mapper/associations/base'
-require 'mongo_mapper/associations/proxy'
-require 'mongo_mapper/associations/many_documents_proxy'
-require 'mongo_mapper/associations/belongs_to_proxy'
-require 'mongo_mapper/associations/belongs_to_polymorphic_proxy'
-require 'mongo_mapper/associations/many_proxy'
-require 'mongo_mapper/associations/many_polymorphic_proxy'
-require 'mongo_mapper/associations/many_embedded_proxy'
-require 'mongo_mapper/associations/many_embedded_polymorphic_proxy'
-require 'mongo_mapper/associations/many_documents_as_proxy'
 require 'mongo_mapper/callbacks'
 require 'mongo_mapper/finder_options'
 require 'mongo_mapper/dirty'
@@ -133,3 +108,14 @@ require 'mongo_mapper/rails_compatibility/embedded_document'
 require 'mongo_mapper/embedded_document'
 require 'mongo_mapper/document'
 require 'mongo_mapper/named_scope'
+require 'mongo_mapper/associations'
+require 'mongo_mapper/associations/base'
+require 'mongo_mapper/associations/proxy'
+require 'mongo_mapper/associations/collection'
+require 'mongo_mapper/associations/many_documents_proxy'
+require 'mongo_mapper/associations/belongs_to_proxy'
+require 'mongo_mapper/associations/belongs_to_polymorphic_proxy'
+require 'mongo_mapper/associations/many_polymorphic_proxy'
+require 'mongo_mapper/associations/many_embedded_proxy'
+require 'mongo_mapper/associations/many_embedded_polymorphic_proxy'
+require 'mongo_mapper/associations/many_documents_as_proxy'
