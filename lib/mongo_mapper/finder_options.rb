@@ -1,16 +1,19 @@
 module MongoMapper
-  # Controls the parsing and handling of options used by finders.
-  #
-  # == Important Note
-  #
+  # = Important Note
   # This class is private to MongoMapper and should not be considered part of 
-  # MongoMapper's public API. Some documentation herein, however, may prove 
-  # useful for understanding how MongoMapper handles the parsing of finder 
-  # conditions and options.
+  # MongoMapper's public API.
   #
-  # @private  
   class FinderOptions
     OptionKeys = [:fields, :select, :skip, :offset, :limit, :sort, :order]
+
+    def self.normalized_field(field)
+      field.to_s == 'id' ? :_id : field
+    end
+
+    def self.normalized_order_direction(direction)
+      direction ||= 'ASC'
+      direction.upcase == 'ASC' ? 1 : -1
+    end
 
     def initialize(model, options)
       raise ArgumentError, "Options must be a hash" unless options.is_a?(Hash)
@@ -30,15 +33,11 @@ module MongoMapper
 
       add_sci_scope
     end
-    
-    # @return [Hash] Mongo compatible criteria options
-    #
-    # @see FinderOptions#to_mongo_criteria
+
     def criteria
       to_mongo_criteria(@conditions)
     end
-    
-    # @return [Hash] Mongo compatible options
+
     def options
       fields = @options.delete(:fields) || @options.delete(:select)
       skip   = @options.delete(:skip)   || @options.delete(:offset) || 0
@@ -47,8 +46,7 @@ module MongoMapper
 
       {:fields => to_mongo_fields(fields), :skip => skip.to_i, :limit => limit.to_i, :sort => sort}
     end
-    
-    # @return [Array<Hash>] Mongo criteria and options enclosed in an Array
+
     def to_a
       [criteria, options]
     end
@@ -58,14 +56,14 @@ module MongoMapper
         criteria = {}
 
         conditions.each_pair do |field, value|
-          field = normalized_field(field)
+          field = self.class.normalized_field(field)
           
           if @model.object_id_key?(field) && value.is_a?(String)
             value = Mongo::ObjectID.from_string(value)
           end
           
           if field.is_a?(FinderOperator)
-            criteria.merge!(field.to_criteria(value))
+            criteria.update(field.to_criteria(value))
             next
           end
           
@@ -74,6 +72,8 @@ module MongoMapper
               criteria[field] = operator?(field) ? value : {'$in' => value}
             when Hash
               criteria[field] = to_mongo_criteria(value, field)
+            when Time
+              criteria[field] = value.utc
             else            
               criteria[field] = value
           end
@@ -86,10 +86,6 @@ module MongoMapper
         field.to_s =~ /^\$/
       end
 
-      def normalized_field(field)
-        field.to_s == 'id' ? :_id : field
-      end
-
       # adds _type single collection inheritance scope for models that need it
       def add_sci_scope
         if @model.single_collection_inherited?
@@ -100,23 +96,29 @@ module MongoMapper
       def to_mongo_fields(fields)
         return if fields.blank?
 
-        if fields.is_a?(String)
-          fields.split(',').map { |field| field.strip }
-        else
+        if fields.respond_to?(:flatten, :compact)
           fields.flatten.compact
+        else
+          fields.split(',').map { |field| field.strip }
         end
       end
 
       def convert_order_to_sort(sort)
         return if sort.blank?
-        pieces = sort.split(',')
-        pieces.map { |s| to_mongo_sort_piece(s) }
+        
+        if sort.respond_to?(:all?) && sort.all? { |s| s.respond_to?(:to_order) }
+          sort.map { |s| s.to_order }
+        elsif sort.respond_to?(:to_order)
+          [sort.to_order]
+        else
+          pieces = sort.split(',')
+          pieces.map { |s| to_mongo_sort_piece(s) }
+        end
       end
 
       def to_mongo_sort_piece(str)
         field, direction = str.strip.split(' ')
-        direction ||= 'ASC'
-        direction = direction.upcase == 'ASC' ? 1 : -1
+        direction = FinderOptions.normalized_order_direction(direction)
         [field, direction]
       end
   end
@@ -127,7 +129,17 @@ module MongoMapper
     end
     
     def to_criteria(value)
-      {@field => {@operator => value}}
+      {FinderOptions.normalized_field(@field) => {@operator => value}}
+    end
+  end
+  
+  class OrderOperator
+    def initialize(field, direction)
+      @field, @direction = field, direction
+    end
+    
+    def to_order
+      [@field.to_s, FinderOptions.normalized_order_direction(@direction)]
     end
   end
 end

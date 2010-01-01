@@ -6,7 +6,6 @@ module MongoMapper
       model.class_eval do
         include EmbeddedDocument
         include InstanceMethods
-        include Observing
         include Callbacks
         include Dirty
         include RailsCompatibility::Document
@@ -20,6 +19,9 @@ module MongoMapper
         end unless respond_to?(:per_page)
       end
 
+      extra_extensions.each { |extension| model.extend(extension) }
+      extra_inclusions.each { |inclusion| model.send(:include, inclusion) }
+
       descendants << model
     end
 
@@ -27,6 +29,34 @@ module MongoMapper
       @descendants ||= Set.new
     end
 
+    def self.append_extensions(*extensions)
+      extra_extensions.concat extensions
+
+      # Add the extension to existing descendants
+      descendants.each do |model|
+        extensions.each { |extension| model.extend(extension) }
+      end
+    end
+
+    # @api private
+    def self.extra_extensions
+      @extra_extensions ||= []
+    end
+
+    def self.append_inclusions(*inclusions)
+      extra_inclusions.concat inclusions
+
+      # Add the inclusion to existing descendants
+      descendants.each do |model|
+        inclusions.each { |inclusion| model.send :include, inclusion }
+      end
+    end
+
+    # @api private
+    def self.extra_inclusions
+      @extra_inclusions ||= []
+    end
+    
     module ClassMethods
       def key(*args)
         key = super
@@ -44,18 +74,6 @@ module MongoMapper
         MongoMapper.ensure_index(self, keys_to_index, options)
       end
 
-      # @overload find(:first, options)
-      #   @see Document.first
-      #
-      # @overload find(:last, options)
-      #   @see Document.last
-      #
-      # @overload find(:all, options)
-      #   @see Document.all
-      #
-      # @overload find(ids, options)
-      #
-      # @raise DocumentNotFound raised when no ID or arguments are provided
       def find!(*args)
         options = args.extract_options!
         options.merge!(scope(:find)) if scope(:find)
@@ -93,39 +111,15 @@ module MongoMapper
         pagination
       end
 
-      # @param [Hash] options any conditions understood by 
-      #   FinderOptions.to_mongo_criteria
-      #
-      # @return the first document in the ordered collection as described by 
-      #   +options+
-      #
-      # @see FinderOptions
       def first(options={})
         find_one(options)
       end
 
-      # @param [Hash] options any conditions understood by 
-      #   FinderOptions.to_mongo_criteria
-      # @option [String] :order this *mandatory* option describes how to 
-      #   identify the ordering of the documents in your collection. Note that 
-      #   the *last* document in this collection will be selected.
-      #
-      # @return the last document in the ordered collection as described by 
-      #   +options+
-      #
-      # @raise Exception when no <tt>:order</tt> option has been defined
       def last(options={})
         raise ':order option must be provided when using last' if options[:order].blank?
         find_one(options.merge(:order => invert_order_clause(options[:order])))
       end
 
-      # @param [Hash] options any conditions understood by 
-      #   FinderOptions.to_mongo_criteria
-      #
-      # @return [Array] all documents in your collection that match the 
-      #   provided conditions
-      #
-      # @see FinderOptions
       def all(options={})
         find_every(options)
       end
@@ -142,52 +136,14 @@ module MongoMapper
         !count(options).zero?
       end
 
-      # @overload create(doc_attributes)
-      #   Create a single new document
-      #   @param [Hash] doc_attributes key/value pairs to create a new 
-      #     document
-      #
-      # @overload create(docs_attributes)
-      #   Create many new documents
-      #   @param [Array<Hash>] provide many Hashes of key/value pairs to create 
-      #     multiple documents
-      #
-      # @example Creating a single document
-      #   MyModel.create({ :foo => "bar" })
-      #
-      # @example Creating multiple documents
-      #   MyModel.create([{ :foo => "bar" }, { :foo => "baz" })
-      #
-      # @return [Boolean] when a document is successfully created, +true+ will 
-      #   be returned. If a document fails to create, +false+ will be returned.
       def create(*docs)
         initialize_each(*docs) { |doc| doc.save }
       end
 
-      # @see Document.create
-      #
-      # @raise [DocumentNotValid] raised if a document fails to create
       def create!(*docs)
         initialize_each(*docs) { |doc| doc.save! }
       end
 
-      # @overload update(id, attributes)
-      #   Update a single document
-      #   @param id the ID of the document you wish to update
-      #   @param [Hash] attributes the key to update on the document with a new 
-      #     value
-      #
-      # @overload update(ids_and_attributes)
-      #   Update multiple documents
-      #   @param [Hash] ids_and_attributes each key is the ID of some document 
-      #     you wish to update. The value each key points toward are those 
-      #     applied to the target document
-      #
-      # @example Updating single document
-      #   Person.update(1, {:foo => 'bar'})
-      #
-      # @example Updating multiple documents at once:
-      #   Person.update({'1' => {:foo => 'bar'}, '2' => {:baz => 'wick'}})
       def update(*args)
         if args.length == 1
           update_multiple(args[0])
@@ -197,10 +153,6 @@ module MongoMapper
         end
       end
 
-      # Removes ("deletes") one or many documents from the collection. Note 
-      # that this will bypass any +destroy+ hooks defined by your class.
-      #
-      # @param [Array] ids the ID or IDs of the records you wish to delete
       def delete(*ids)
         collection.remove(to_criteria(:_id => ids.flatten))
       end
@@ -209,27 +161,6 @@ module MongoMapper
         collection.remove(to_criteria(options))
       end
 
-      # Iterates over each document found by the provided IDs and calls their 
-      # +destroy+ method. This has the advantage of processing your document's 
-      # +destroy+ call-backs.
-      #
-      # @overload destroy(id)
-      #   Destroy a single document by ID
-      #   @param id the ID of the document to destroy
-      #
-      # @overload destroy(ids)
-      #   Destroy many documents by their IDs
-      #   @param [Array] the IDs of each document you wish to destroy
-      #
-      # @example Destroying a single document
-      #   Person.destroy("34")
-      #
-      # @example Destroying multiple documents
-      #   Person.destroy("34", "45", ..., "54")
-      #
-      #   # OR...
-      #
-      #   Person.destroy(["34", "45", ..., "54"])
       def destroy(*ids)
         find_some(ids.flatten).each(&:destroy)
       end
@@ -237,15 +168,58 @@ module MongoMapper
       def destroy_all(options={})
         all(options).each(&:destroy)
       end
+      
+      def increment(*args)
+        modifier_update('$inc', args)
+      end
+      
+      def decrement(*args)
+        criteria, keys = criteria_and_keys_from_args(args)
+        values, to_decrement = keys.values, {}
+        keys.keys.each_with_index { |k, i| to_decrement[k] = -values[i].abs }
+        collection.update(criteria, {'$inc' => to_decrement}, :multi => true)
+      end
+      
+      def set(*args)
+        modifier_update('$set', args)
+      end
+      
+      def push(*args)
+        modifier_update('$push', args)
+      end
+      
+      def push_all(*args)
+        modifier_update('$pushAll', args)
+      end
+      
+      def push_uniq(*args)
+        criteria, keys = criteria_and_keys_from_args(args)
+        keys.each { |key, value | criteria[key] = {'$ne' => value} }
+        collection.update(criteria, {'$push' => keys}, :multi => true)
+      end
+      
+      def pull(*args)
+        modifier_update('$pull', args)
+      end
+      
+      def pull_all(*args)
+        modifier_update('$pullAll', args)
+      end
+      
+      def modifier_update(modifier, args)
+        criteria, keys = criteria_and_keys_from_args(args)
+        modifiers = {modifier => keys}
+        collection.update(criteria, modifiers, :multi => true)
+      end
+      private :modifier_update
+      
+      def criteria_and_keys_from_args(args)
+        keys     = args.pop
+        criteria = args[0].is_a?(Hash) ? args[0] : {:id => args}
+        [to_criteria(criteria), keys]
+      end
+      private :criteria_and_keys_from_args
 
-      # @overload connection()
-      #   @return [Mongo::Connection] the connection used by your document class
-      #
-      # @overload connection(mongo_connection)
-      #   @param [Mongo::Connection] mongo_connection a new connection for your 
-      #     document class to use
-      #   @return [Mongo::Connection] a new Mongo::Connection for yoru document 
-      #     class
       def connection(mongo_connection=nil)
         if mongo_connection.nil?
           @connection ||= MongoMapper.connection
@@ -255,24 +229,14 @@ module MongoMapper
         @connection
       end
 
-      # Changes the database name from the default to whatever you want
-      #
-      # @param [#to_s] name the new database name to use.
       def set_database_name(name)
         @database_name = name
       end
       
-      # Returns the database name
-      #
-      # @return [String] the database name
       def database_name
         @database_name
       end
 
-      # Returns the database the document should use. Defaults to
-      #   MongoMapper.database if other database is not set.
-      #
-      # @return [Mongo::DB] the mongo database instance
       def database
         if database_name.nil?
           MongoMapper.database
@@ -281,33 +245,29 @@ module MongoMapper
         end
       end
 
-      # Changes the collection name from the default to whatever you want
-      #
-      # @param [#to_s] name the new collection name to use.
       def set_collection_name(name)
         @collection_name = name
       end
 
-      # Returns the collection name, if not set, defaults to class name tableized
-      #
-      # @return [String] the collection name, if not set, defaults to class 
-      #   name tableized
       def collection_name
         @collection_name ||= self.to_s.tableize.gsub(/\//, '.')
       end
 
-      # @return the Mongo Ruby driver +collection+ object
       def collection
         database.collection(collection_name)
       end
-      
-      # Defines a +created_at+ and +updated_at+ attribute (with a +Time+ 
-      # value) on your document. These attributes are updated by an 
-      # injected +update_timestamps+ +before_save+ hook.
+
       def timestamps!
         key :created_at, Time
         key :updated_at, Time
         class_eval { before_save :update_timestamps }
+      end
+
+      def userstamps!
+        key :creator_id, ObjectId
+        key :updater_id, ObjectId
+        belongs_to :creator, :class_name => 'User'
+        belongs_to :updater, :class_name => 'User'
       end
 
       def single_collection_inherited?
@@ -408,13 +368,23 @@ module MongoMapper
       def collection
         self.class.collection
       end
+      
+      def database
+        self.class.database
+      end
 
       def new?
         read_attribute('_id').blank? || using_custom_id?
       end
 
-      def save(perform_validations=true)
-        !perform_validations || valid? ? create_or_update : false
+      def save(options={})
+        if options === false
+          ActiveSupport::Deprecation.warn "save with true/false is deprecated. You should now use :validate => true/false."
+          options = {:validate => false}
+        end
+        options.reverse_merge!(:validate => true)
+        perform_validations = options.delete(:validate)
+        !perform_validations || valid? ? create_or_update(options) : false
       end
 
       def save!
@@ -422,9 +392,11 @@ module MongoMapper
       end
 
       def destroy
-        return false if frozen?
-        self.class.delete(_id) unless new?
-        freeze
+        self.class.delete(id) unless new?
+      end
+      
+      def delete
+        self.class.delete(id) unless new?
       end
 
       def reload
@@ -435,14 +407,14 @@ module MongoMapper
       end
 
     private
-      def create_or_update
-        result = new? ? create : update
+      def create_or_update(options={})
+        result = new? ? create(options) : update(options)
         result != false
       end
 
-      def create
+      def create(options={})
         assign_id
-        save_to_collection
+        save_to_collection(options)
       end
 
       def assign_id
@@ -451,13 +423,14 @@ module MongoMapper
         end
       end
 
-      def update
-        save_to_collection
+      def update(options={})
+        save_to_collection(options)
       end
 
-      def save_to_collection
+      def save_to_collection(options={})
         clear_custom_id_flag
-        collection.save(to_mongo)
+        safe = options.delete(:safe) || false
+        collection.save(to_mongo, :safe => safe)
       end
 
       def update_timestamps

@@ -281,7 +281,7 @@ module MongoMapper
       end
 
       def id
-        read_attribute(:_id)
+        self[:_id]
       end
 
       def id=(value)
@@ -291,7 +291,7 @@ module MongoMapper
           @using_custom_id = true
         end
         
-        write_attribute :_id, value
+        self[:_id] = value
       end
 
       def using_custom_id?
@@ -305,16 +305,12 @@ module MongoMapper
         "#<#{self.class} #{attributes_as_nice_string}>"
       end
 
-      def save
-        if _root_document
-          _root_document.save
-        end
+      def save(options={})
+        _root_document.try(:save, options)
       end
       
-      def save!
-        if _root_document
-          _root_document.save!
-        end
+      def save!(options={})
+        _root_document.try(:save!, options)
       end
 
       def update_attributes(attrs={})
@@ -355,7 +351,7 @@ module MongoMapper
         def read_attribute(name)
           if key = _keys[name]
             value = key.get(instance_variable_get("@#{name}"))
-            instance_variable_set "@#{name}", value if !frozen?
+            instance_variable_set "@#{name}", value
             value
           else
             raise KeyNotFound, "Could not find key: #{name.inspect}"

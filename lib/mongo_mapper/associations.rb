@@ -3,12 +3,14 @@ module MongoMapper
     module ClassMethods
       def belongs_to(association_id, options={}, &extension)
         create_association(:belongs_to, association_id, options, &extension)
-        self
       end
 
       def many(association_id, options={}, &extension)
         create_association(:many, association_id, options, &extension)
-        self
+      end
+      
+      def one(association_id, options={}, &extension)
+        create_association(:one, association_id, options, &extension)
       end
       
       def associations
@@ -61,7 +63,7 @@ module MongoMapper
       def get_proxy(association)
         unless proxy = self.instance_variable_get(association.ivar)
           proxy = association.proxy_class.new(self, association)
-          self.instance_variable_set(association.ivar, proxy) if !frozen?
+          self.instance_variable_set(association.ivar, proxy)
         end
         proxy
       end

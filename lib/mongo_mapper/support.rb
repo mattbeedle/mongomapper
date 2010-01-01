@@ -120,7 +120,7 @@ end
 
 class ObjectId
   def self.to_mongo(value)
-    if value.nil?
+    if value.blank?
       nil
     elsif value.is_a?(Mongo::ObjectID)
       value
@@ -160,9 +160,12 @@ class Symbol
       MongoMapper::FinderOperator.new(self, "$#{operator}")
     end
   end
+  
+  def asc;  MongoMapper::OrderOperator.new(self, 'asc') end
+  def desc; MongoMapper::OrderOperator.new(self, 'desc') end
 end
 
-class Time  
+class Time
   def self.to_mongo(value)
     if value.nil? || value == ''
       nil

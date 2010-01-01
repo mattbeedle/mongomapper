@@ -1,8 +1,5 @@
 module MongoMapper
   module Associations
-    # Base class for keeping track of associations.
-    #
-    # @private
     class Base
       attr_reader :type, :name, :options, :finder_options
 
@@ -47,6 +44,10 @@ module MongoMapper
       def belongs_to?
         @belongs_to_type ||= @type == :belongs_to
       end
+      
+      def one?
+        @one_type ||= @type == :one
+      end
 
       def polymorphic?
         !!@options[:polymorphic]
@@ -90,6 +91,8 @@ module MongoMapper
                 ManyDocumentsProxy
               end
             end
+          elsif one?
+            OneProxy
           else
             polymorphic? ? BelongsToPolymorphicProxy : BelongsToProxy
           end
