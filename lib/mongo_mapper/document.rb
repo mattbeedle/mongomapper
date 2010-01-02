@@ -125,7 +125,7 @@ module MongoMapper
       end
 
       def find_by_id(id)
-        find_one(:_id => id)
+        find(id)
       end
 
       def count(options={})
