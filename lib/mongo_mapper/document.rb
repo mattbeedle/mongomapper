@@ -295,6 +295,7 @@ module MongoMapper
         end
 
         def find_every(options)
+          options.merge!(scope(:find)) if scope(:find)
           criteria, options = to_finder_options(options)
           collection.find(criteria, options).to_a.map do |doc|
             initialize_doc(doc)
