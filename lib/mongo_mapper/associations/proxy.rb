@@ -17,7 +17,7 @@ module MongoMapper
       delegate :collection, :to => :klass
       
       def initialize(owner, reflection)
-        @owner, @reflection = owner, reflection
+        @owner, @reflection, @loaded = owner, reflection, false
         Array(reflection.options[:extend]).each { |ext| proxy_extend(ext) }
         reset
       end
@@ -45,6 +45,11 @@ module MongoMapper
         target.blank?
       end
       
+      def present?
+        load_target
+        target.present?
+      end
+      
       def reload
         reset
         load_target
@@ -57,7 +62,7 @@ module MongoMapper
 
       def reset
         @loaded = false
-        target = nil
+        @target = nil
       end
 
       def respond_to?(*args)

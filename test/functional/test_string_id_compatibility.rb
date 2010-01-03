@@ -2,19 +2,17 @@ require 'test_helper'
 
 class StringIdCompatibilityTest < Test::Unit::TestCase
   def setup
-    @note_class = Class.new do
-      include MongoMapper::EmbeddedDocument
+    @note_class = EDoc do
       key :_id, String
     end
     
-    @task_class = Class.new do
-      include MongoMapper::Document
+    @task_class = Doc do
       key :_id, String
       key :project_id, String
       belongs_to :project
     end
     
-    @project_class = Class.new do
+    @project_class = Doc do
       include MongoMapper::Document
       key :_id, String
     end
@@ -22,9 +20,6 @@ class StringIdCompatibilityTest < Test::Unit::TestCase
     @task_class.belongs_to :project, :class => @project_class
     @project_class.many :notes, :class => @note_class
     @project_class.many :tasks, :class => @task_class, :foreign_key => 'project_id'
-    
-    @project_class.collection.remove
-    @task_class.collection.remove
   end
   
   should "assign correct _id for documents" do

@@ -2,18 +2,10 @@ require 'test_helper'
 
 class OneProxyTest < Test::Unit::TestCase
   def setup
-    @post_class = Class.new do
-      include MongoMapper::Document
-      def self.name; 'Post' end
-    end
-    
-    @author_class = Class.new do
-      include MongoMapper::Document
+    @post_class = Doc('Post')
+    @author_class = Doc do
       key :post_id, ObjectId
     end
-    
-    @post_class.collection.remove
-    @author_class.collection.remove
   end
   
   should "default to nil" do
@@ -23,13 +15,39 @@ class OneProxyTest < Test::Unit::TestCase
   
   should "be able to replace the association" do
     @post_class.one :author, :class => @author_class
+    
     post = @post_class.new
-    author = @author_class.new
+    author = @author_class.new(:name => 'Frank')
     post.author = author
     post.reload
     
     post.author.should == author
     post.author.nil?.should be_false
+    
+    new_author = @author_class.new(:name => 'Emily')
+    post.author = new_author
+    post.author.should == new_author
+  end
+  
+  should "have boolean method for testing presence" do
+    @post_class.one :author, :class => @author_class
+    
+    post = @post_class.new
+    post.author?.should be_false
+    
+    post.author = @author_class.new(:name => 'Frank')
+    post.author?.should be_true
+  end
+  
+  should "work with criteria" do
+    @post_class.one :primary_author, :class => @author_class, :primary => true
+    @post_class.one :author, :class => @author_class
+    
+    post = @post_class.create
+    author = @author_class.create(:name => 'Frank', :primary => false, :post_id => post.id)
+    primary = @author_class.create(:name => 'Bill', :primary => true, :post_id => post.id)
+    post.author.should == author
+    post.primary_author.should == primary
   end
   
   should "unset the association" do
