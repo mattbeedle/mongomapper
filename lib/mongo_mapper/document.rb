@@ -129,6 +129,7 @@ module MongoMapper
       end
 
       def count(options={})
+        options.merge!(scope(:find)) if scope(:find)
         collection.find(to_criteria(options)).count
       end
 
