@@ -23,6 +23,7 @@ module MongoMapper
         plugin Plugins::Validations
         plugin Plugins::Callbacks # for now callbacks needs to be after validations
         plugin Plugins::NamedScope
+        
         extend Plugins::Validations::DocumentMacros
       end
       
