@@ -1,6 +1,10 @@
 module MongoMapper
   module Plugins
     module Keys
+      def self.configure(model)
+        model.key :_id, ObjectId
+      end
+      
       module ClassMethods
         def inherited(descendant)
           descendant.instance_variable_set(:@keys, keys.dup)
@@ -42,16 +46,13 @@ module MongoMapper
           value.is_a?(self) ? value : load(value)
         end
 
+        # load is overridden in identity map to ensure same objects are loaded
         def load(attrs)
           begin
             klass = attrs['_type'].present? ? attrs['_type'].constantize : self
-            doc = klass.new(attrs)
-            doc.instance_variable_set("@new", false)
-            doc
+            klass.new(attrs, true)
           rescue NameError
-            doc = new(attrs)
-            doc.instance_variable_set("@new", false)
-            doc
+            new(attrs, true)
           end
         end
 
@@ -136,11 +137,7 @@ module MongoMapper
       end
       
       module InstanceMethods
-        def self.included(model)
-          model.key :_id, ObjectId
-        end
-        
-        def initialize(attrs={})
+        def initialize(attrs={}, from_db=false)
           unless attrs.nil?
             provided_keys = attrs.keys.map { |k| k.to_s }
             unless provided_keys.include?('_id') || provided_keys.include?('id')
@@ -148,7 +145,7 @@ module MongoMapper
             end
           end
           
-          @new = true
+          @new = from_db ? false : true
           self._type = self.class.name if respond_to?(:_type=)
           self.attributes = attrs
         end
