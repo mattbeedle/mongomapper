@@ -6,7 +6,7 @@ require 'set'
 # if there is a better way to do this, please enlighten me!
 if self.class.const_defined?(:Gem)
   gem 'activesupport', '>= 2.3'
-  gem 'mongo', '0.18.2'
+  gem 'mongo', '0.18.3'
   gem 'jnunemaker-validatable', '1.8.1'
 end
 
@@ -117,6 +117,7 @@ require 'mongo_mapper/plugins/inspect'
 require 'mongo_mapper/plugins/keys'
 require 'mongo_mapper/plugins/logger'
 require 'mongo_mapper/plugins/pagination'
+require 'mongo_mapper/plugins/protected'
 require 'mongo_mapper/plugins/rails'
 require 'mongo_mapper/plugins/serialization'
 require 'mongo_mapper/plugins/validations'

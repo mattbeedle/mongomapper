@@ -7,8 +7,8 @@ module MongoMapper
         include InstanceMethods
         extend  ClassMethods
         extend  Finders
-
         extend Plugins
+
         plugin Plugins::Associations
         plugin Plugins::Clone
         plugin Plugins::Descendants
@@ -18,6 +18,7 @@ module MongoMapper
         plugin Plugins::Dirty # for now dirty needs to be after keys
         plugin Plugins::Logger
         plugin Plugins::Pagination
+        plugin Plugins::Protected
         plugin Plugins::Rails
         plugin Plugins::Serialization
         plugin Plugins::Validations
@@ -70,6 +71,21 @@ module MongoMapper
         end
       end
 
+      def find_or_create(arg)
+        first(arg) || create(arg)
+      end
+
+      def find_each(options={})
+        criteria, options = to_finder_options(options)
+        collection.find(criteria, options).each do |doc|
+          yield load(doc)
+        end
+      end
+
+      def find_by_id(id)
+        find(id)
+      end
+
       def first(options={})
         find_one(options)
       end
@@ -83,20 +99,9 @@ module MongoMapper
         find_many(options.merge(scope(:find)))
       end
 
-      def find_by_id(id)
-        find(id)
-      end
-
       def count(options={})
         options.merge!(scope(:find)) if scope(:find)
         collection.find(to_criteria(options)).count
-      end
-
-      def find_each(options={})
-        criteria, options = to_finder_options(options)
-        collection.find(criteria, options).each do |doc|
-          yield load(doc)
-        end
       end
 
       def exists?(options={})
