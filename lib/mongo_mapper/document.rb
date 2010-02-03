@@ -96,7 +96,8 @@ module MongoMapper
       end
 
       def all(options={})
-        find_many(options.merge(scope(:find)))
+        options.merge!(scope(:find)) if scope(:find)
+        find_many(options)
       end
 
       def count(options={})
@@ -276,7 +277,8 @@ module MongoMapper
 
         def find_some(ids, options={})
           ids = ids.flatten.compact.uniq
-          find_many(options.merge(scope(:find)).merge(:_id => ids)).compact
+          options.merge!(scope(:find)) if scope(:find)
+          find_many(options.merge(:_id => ids)).compact
         end
         
         def find_some!(ids, options={})
