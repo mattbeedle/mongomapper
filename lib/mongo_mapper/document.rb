@@ -1,13 +1,13 @@
 module MongoMapper
   module Document
-    extend DescendantAppends
+    extend Support::DescendantAppends
 
     def self.included(model)
       model.class_eval do
         include InstanceMethods
+        extend  Support::Find
         extend  ClassMethods
-        extend  Finders
-        extend Plugins
+        extend  Plugins
 
         plugin Plugins::Associations
         plugin Plugins::Clone
@@ -27,10 +27,10 @@ module MongoMapper
         
         extend Plugins::Validations::DocumentMacros
       end
-      
+
       super
     end
-    
+
     module ClassMethods
       def inherited(subclass)
         subclass.set_collection_name(collection_name)
@@ -48,7 +48,7 @@ module MongoMapper
       end
 
       def find(*args)
-        find_all_first_last_error(args)
+        assert_no_first_last_or_all(args)
         options = args.extract_options!
         return nil if args.size == 0
 
@@ -60,7 +60,7 @@ module MongoMapper
       end
 
       def find!(*args)
-        find_all_first_last_error(args)
+        assert_no_first_last_or_all(args)
         options = args.extract_options!
         raise DocumentNotFound, "Couldn't find without an ID" if args.size == 0
 
@@ -69,10 +69,6 @@ module MongoMapper
         else
           find_one(options.merge({:_id => args[0]})) || raise(DocumentNotFound, "Document match #{options.inspect} does not exist in #{collection.name} collection")
         end
-      end
-
-      def find_or_create(arg)
-        first(arg) || create(arg)
       end
 
       def find_each(options={})
@@ -84,6 +80,14 @@ module MongoMapper
 
       def find_by_id(id)
         find(id)
+      end
+
+      def first_or_create(arg)
+        first(arg) || create(arg)
+      end
+
+      def first_or_new(arg)
+        first(arg) || new(arg)
       end
 
       def first(options={})
@@ -139,46 +143,46 @@ module MongoMapper
       end
 
       def destroy_all(options={})
-        all(options).each(&:destroy)
+        find_each(options) { |document| document.destroy }
       end
-      
+
       def increment(*args)
         modifier_update('$inc', args)
       end
-      
+
       def decrement(*args)
         criteria, keys = criteria_and_keys_from_args(args)
         values, to_decrement = keys.values, {}
         keys.keys.each_with_index { |k, i| to_decrement[k] = -values[i].abs }
         collection.update(criteria, {'$inc' => to_decrement}, :multi => true)
       end
-      
+
       def set(*args)
         modifier_update('$set', args)
       end
-      
+
       def push(*args)
         modifier_update('$push', args)
       end
-      
+
       def push_all(*args)
         modifier_update('$pushAll', args)
       end
-      
+
       def push_uniq(*args)
         criteria, keys = criteria_and_keys_from_args(args)
         keys.each { |key, value | criteria[key] = {'$ne' => value} }
         collection.update(criteria, {'$push' => keys}, :multi => true)
       end
-      
+
       def pull(*args)
         modifier_update('$pull', args)
       end
-      
+
       def pull_all(*args)
         modifier_update('$pullAll', args)
       end
-      
+
       def pop(*args)
         modifier_update('$pop', args)
       end
@@ -269,7 +273,7 @@ module MongoMapper
           [to_criteria(criteria), keys]
         end
 
-        def find_all_first_last_error(args)
+        def assert_no_first_last_or_all(args)
           if args[0] == :first || args[0] == :last || args[0] == :all
             raise ArgumentError, "#{self}.find(:#{args}) is no longer supported, use #{self}.#{args} instead."
           end
@@ -280,11 +284,11 @@ module MongoMapper
           options.merge!(scope(:find)) if scope(:find)
           find_many(options.merge(:_id => ids)).compact
         end
-        
+
         def find_some!(ids, options={})
           ids = ids.flatten.compact.uniq
           documents = find_some(ids, options)
-          
+
           if ids.size == documents.size
             documents
           else
@@ -368,21 +372,11 @@ module MongoMapper
         options.assert_valid_keys(:safe)
         save(options) || raise(DocumentNotValid.new(self))
       end
-      
-      def update_attributes(attrs={})
-        self.attributes = attrs
-        save
-      end
-
-      def update_attributes!(attrs={})
-        self.attributes = attrs
-        save!
-      end
 
       def destroy
         delete
       end
-      
+
       def delete
         self.class.delete(id) unless new?
       end
@@ -412,7 +406,7 @@ module MongoMapper
       end
 
       def save_to_collection(options={})
-        safe = options.delete(:safe) || false
+        safe = options[:safe] || false
         @new = false
         collection.save(to_mongo, :safe => safe)
       end
