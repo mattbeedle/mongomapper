@@ -20,6 +20,7 @@ module MongoMapper
     autoload :Inspect,        'mongo_mapper/plugins/inspect'
     autoload :Keys,           'mongo_mapper/plugins/keys'
     autoload :Logger,         'mongo_mapper/plugins/logger'
+    autoload :NamedScopes,    'mongo_mapper/plugins/named_scope'
     autoload :Protected,      'mongo_mapper/plugins/protected'
     autoload :Rails,          'mongo_mapper/plugins/rails'
     autoload :Serialization,  'mongo_mapper/plugins/serialization'
