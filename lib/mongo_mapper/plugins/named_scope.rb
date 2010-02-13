@@ -172,19 +172,11 @@ module MongoMapper
         end
 
         def first(*args)
-          if args.first.kind_of?(Integer) || (@found && !args.first.kind_of?(Hash))
-            proxy_found.first(*args)
-          else
-            find(:first, *args)
-          end
+          proxy_found.first(*args)
         end
 
         def last(*args)
-          if args.first.kind_of?(Integer) || (@found && !args.first.kind_of?(Hash))
-            proxy_found.last(*args)
-          else
-            find(:last, *args)
-          end
+          proxy_found.last(*args)
         end
 
         def size
@@ -231,7 +223,7 @@ module MongoMapper
         end
 
         def load_found
-          @found = find(:all)
+          @found = all
         end
       end
     end
