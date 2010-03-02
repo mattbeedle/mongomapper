@@ -24,7 +24,6 @@ module MongoMapper
         plugin Plugins::Validations
         plugin Plugins::Callbacks # for now callbacks needs to be after validations
         plugin Plugins::NamedScope
-        
         extend Plugins::Validations::DocumentMacros
       end
 
@@ -203,7 +202,7 @@ module MongoMapper
       def set_database_name(name)
         @database_name = name
       end
-      
+
       def database_name
         @database_name
       end
@@ -378,7 +377,12 @@ module MongoMapper
       end
 
       def delete
+        @_destroyed = true
         self.class.delete(id) unless new?
+      end
+
+      def destroyed?
+        @_destroyed == true
       end
 
       def reload
@@ -389,6 +393,36 @@ module MongoMapper
         else
           raise DocumentNotFound, "Document match #{_id.inspect} does not exist in #{collection.name} collection"
         end
+      end
+
+      # Used by embedded docs to find root easily without if/respond_to? stuff.
+      # Documents are always root documents.
+      def _root_document
+        self
+      end
+      
+      def increment(hash)
+        self.class.increment({:_id => id}, hash)
+      end
+      
+      def decrement(hash)
+        self.class.decrement({:_id => id}, hash)
+      end
+      
+      def set(hash)
+        self.class.set({:_id => id}, hash)
+      end
+      
+      def push(hash)
+        self.class.push({:_id => id}, hash)
+      end
+      
+      def pull(hash)
+        self.class.pull({:_id => id}, hash)
+      end
+      
+      def push_uniq(hash)
+        self.class.push_uniq({:_id => id}, hash)
       end
 
     private
