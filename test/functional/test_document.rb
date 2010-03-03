@@ -1069,89 +1069,6 @@ class DocumentTest < Test::Unit::TestCase
     end
   end
 
-  context "timestamping" do
-    setup do
-      @klass = Doc do
-        set_collection_name 'users'
-
-        key :first_name, String
-        key :last_name, String
-        key :age, Integer
-        key :date, Date
-      end
-      @klass.timestamps!
-    end
-
-    should "set created_at and updated_at on create" do
-      doc = @klass.new(:first_name => 'John', :age => 27)
-      doc.created_at.should be(nil)
-      doc.updated_at.should be(nil)
-      doc.save
-      doc.created_at.should_not be(nil)
-      doc.updated_at.should_not be(nil)
-    end
-
-    should "not overwrite created_at if it already exists" do
-      original_created_at = 1.month.ago
-      doc = @klass.new(:first_name => 'John', :age => 27, :created_at => original_created_at)
-      doc.created_at.to_i.should == original_created_at.to_i
-      doc.updated_at.should be_nil
-      doc.save
-      doc.created_at.to_i.should == original_created_at.to_i
-      doc.updated_at.should_not be_nil
-    end
-
-    should "set updated_at on field update but leave created_at alone" do
-      doc = @klass.create(:first_name => 'John', :age => 27)
-      old_created_at = doc.created_at
-      old_updated_at = doc.updated_at
-      doc.first_name = 'Johnny'
-
-      Timecop.freeze(Time.now + 5.seconds) do
-        doc.save
-      end
-
-      doc.created_at.should == old_created_at
-      doc.updated_at.should_not == old_updated_at
-    end
-
-    should "set updated_at on document update but leave created_at alone" do
-      doc = @klass.create(:first_name => 'John', :age => 27)
-      old_created_at = doc.created_at
-      old_updated_at = doc.updated_at
-
-      Timecop.freeze(Time.now + 5.seconds) do
-        @klass.update(doc._id, { :first_name => 'Johnny' })
-      end
-
-      doc = doc.reload
-      doc.created_at.should == old_created_at
-      doc.updated_at.should_not == old_updated_at
-    end
-  end
-
-  context "userstamping" do
-    setup do
-      @document.userstamps!
-    end
-
-    should "add creator_id key" do
-      @document.keys.keys.should include('creator_id')
-    end
-
-    should "add updater_id key" do
-      @document.keys.keys.should include('updater_id')
-    end
-
-    should "add belongs_to creator" do
-      @document.associations.keys.should include('creator')
-    end
-
-    should "add belongs_to updater" do
-      @document.associations.keys.should include('updater')
-    end
-  end
-
   context "#exists?" do
     setup do
       @doc = @document.create(:first_name => "James", :age => 27)
@@ -1243,39 +1160,6 @@ class DocumentTest < Test::Unit::TestCase
       doc.age.should == 27
       doc.favorite_color.should == 'red'
       doc.skills.should == ['ruby', 'rails', 'javascript', 'xhtml', 'css']
-    end
-  end
-
-  context "Indexing" do
-    setup do
-      drop_indexes(@document)
-    end
-
-    should "allow creating index for a key" do
-      @document.ensure_index :first_name
-      @document.should have_index('first_name_1')
-    end
-
-    should "allow creating unique index for a key" do
-      @document.ensure_index :first_name, :unique => true
-      @document.should have_index('first_name_1')
-    end
-
-    should "allow creating index on multiple keys" do
-      @document.ensure_index [[:first_name, 1], [:last_name, -1]]
-
-      # order is different for different versions of ruby so instead of
-      # just checking have_index('first_name_1_last_name_-1') I'm checking
-      # the values of the indexes to make sure the index creation was successful
-      @document.collection.index_information.detect do |index|
-        keys = index[1]
-        keys.include?(['first_name', 1]) && keys.include?(['last_name', -1])
-      end.should_not be_nil
-    end
-
-    should "work with :index shortcut when defining key" do
-      @document.key :father, String, :index => true
-      @document.should have_index('father_1')
     end
   end
 end
