@@ -1,8 +1,8 @@
 require 'rubygems'
 require 'rake'
 require 'jeweler'
-require 'yard'
-require 'yard/rake/yardoc_task'
+
+require File.dirname(__FILE__) + '/lib/mongo_mapper/version'
 
 Jeweler::Tasks.new do |gem|
   gem.name        = "mongo_mapper"
@@ -10,6 +10,7 @@ Jeweler::Tasks.new do |gem|
   gem.email       = "nunemaker@gmail.com"
   gem.homepage    = "http://github.com/jnunemaker/mongomapper"
   gem.authors     = ["John Nunemaker"]
+  gem.version     = MongoMapper::Version
 
   gem.add_dependency('activesupport', '>= 2.3')
   gem.add_dependency('mongo', '0.19.1')
@@ -49,7 +50,3 @@ end
 
 task :default  => :test
 task :test     => :check_dependencies
-
-YARD::Rake::YardocTask.new(:doc) do |t|
-  t.options = ["--legacy"] if RUBY_VERSION < "1.9.0"
-end
