@@ -19,6 +19,7 @@ module MongoMapper
         plugin Plugins::Logger
         plugin Plugins::Modifiers
         plugin Plugins::Pagination
+        plugin Plugins::Persistence
         plugin Plugins::Protected
         plugin Plugins::Rails
         plugin Plugins::Serialization
@@ -152,43 +153,6 @@ module MongoMapper
         false
       end
 
-      def connection(mongo_connection=nil)
-        if mongo_connection.nil?
-          @connection ||= MongoMapper.connection
-        else
-          @connection = mongo_connection
-        end
-        @connection
-      end
-
-      def set_database_name(name)
-        @database_name = name
-      end
-
-      def database_name
-        @database_name
-      end
-
-      def database
-        if database_name.nil?
-          MongoMapper.database
-        else
-          connection.db(database_name)
-        end
-      end
-
-      def set_collection_name(name)
-        @collection_name = name
-      end
-
-      def collection_name
-        @collection_name ||= self.to_s.tableize.gsub(/\//, '.')
-      end
-
-      def collection
-        database.collection(collection_name)
-      end
-
       def single_collection_inherited?
         keys.key?(:_type) && single_collection_inherited_superclass?
       end
@@ -290,14 +254,6 @@ module MongoMapper
     end
 
     module InstanceMethods
-      def collection
-        self.class.collection
-      end
-
-      def database
-        self.class.database
-      end
-
       def save(options={})
         options.assert_valid_keys(:validate, :safe)
         options.reverse_merge!(:validate => true)
@@ -316,6 +272,10 @@ module MongoMapper
       def delete
         @_destroyed = true
         self.class.delete(id) unless new?
+      end
+
+      def new?
+        @new
       end
 
       def destroyed?
