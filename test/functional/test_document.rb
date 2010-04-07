@@ -942,7 +942,6 @@ class DocumentTest < Test::Unit::TestCase
     setup do
       class ::DocParent
         include MongoMapper::Document
-        key :_type, String
         key :name, String
       end
       DocParent.collection.remove
@@ -962,6 +961,10 @@ class DocumentTest < Test::Unit::TestCase
       Object.send :remove_const, 'DocDaughter' if defined?(::DocDaughter)
       Object.send :remove_const, 'DocSon'      if defined?(::DocSon)
       Object.send :remove_const, 'DocGrandSon' if defined?(::DocGrandSon)
+    end
+
+    should "automatically add _type key to store class" do
+      DocParent.keys.should include(:_type)
     end
 
     should "use the same collection in the subclass" do
@@ -1089,6 +1092,11 @@ class DocumentTest < Test::Unit::TestCase
       lambda {
         DocParent.delete_all
       }.should change { DocParent.count }.by(-2)
+    end
+
+    should "set type from class and ignore _type in attributes" do
+      doc = DocSon.create(:_type => 'DocDaughter', :name => 'John')
+      DocParent.first.should be_instance_of(DocSon)
     end
 
     should "be able to reload parent inherited class" do

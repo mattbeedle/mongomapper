@@ -7,6 +7,7 @@ module MongoMapper
 
       module ClassMethods
         def inherited(descendant)
+          key :_type, String unless keys.keys.include?(:_type)
           descendant.instance_variable_set(:@keys, keys.dup)
           super
         end
@@ -147,7 +148,6 @@ module MongoMapper
       module InstanceMethods
         def initialize(attrs={}, from_database=false)
           default_id_value(attrs)
-          assign_type
           
           if from_database
             @new = false
@@ -156,6 +156,8 @@ module MongoMapper
             @new = true
             assign(attrs)
           end
+          
+          assign_type
         end
 
         def persisted?
@@ -214,7 +216,7 @@ module MongoMapper
 
         def id=(value)
           if self.class.using_object_id?
-            value = MongoMapper.normalize_object_id(value)
+            value = ObjectId.to_mongo(value)
           end
 
           self[:_id] = value

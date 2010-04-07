@@ -179,17 +179,17 @@ class EmbeddedDocumentTest < Test::Unit::TestCase
 
       context "keys" do
         should "be inherited" do
-          Grandparent.keys.keys.sort.should == ['_id', 'grandparent']
-          Parent.keys.keys.sort.should == ['_id', 'grandparent', 'parent']
-          Child.keys.keys.sort.should  == ['_id', 'child', 'grandparent', 'parent']
+          Grandparent.keys.keys.sort.should == ['_id', '_type', 'grandparent']
+          Parent.keys.keys.sort.should == ['_id', '_type', 'grandparent', 'parent']
+          Child.keys.keys.sort.should  == ['_id', '_type', 'child', 'grandparent', 'parent']
         end
 
         should "propogate to descendants if key added after class definition" do
-          Grandparent.key :_type, String
+          Grandparent.key :foo, String
 
-          Grandparent.keys.keys.sort.should == ['_id', '_type', 'grandparent']
-          Parent.keys.keys.sort.should      == ['_id', '_type', 'grandparent', 'parent']
-          Child.keys.keys.sort.should       == ['_id', '_type', 'child', 'grandparent', 'parent']
+          Grandparent.keys.keys.sort.should == ['_id', '_type', 'foo', 'grandparent']
+          Parent.keys.keys.sort.should      == ['_id', '_type', 'foo', 'grandparent', 'parent']
+          Child.keys.keys.sort.should       == ['_id', '_type', 'child', 'foo', 'grandparent', 'parent']
         end
 
         should "not add anonymous objects to the ancestor tree" do
@@ -302,8 +302,8 @@ class EmbeddedDocumentTest < Test::Unit::TestCase
           @klass.new._type.should == 'FooBar'
         end
 
-        should "not change _type if already set" do
-          @klass.new(:_type => 'Foo')._type.should == 'Foo'
+        should "ignore _type attribute and always use class" do
+          @klass.new(:_type => 'Foo')._type.should == 'FooBar'
         end
       end
 
