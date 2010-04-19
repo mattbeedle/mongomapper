@@ -95,7 +95,6 @@ module MongoMapper
           end
 
           def create_key_in_descendants(*args)
-            return if descendants.blank?
             descendants.each { |descendant| descendant.key(*args) }
           end
 
@@ -188,7 +187,11 @@ module MongoMapper
 
           embedded_associations.each do |association|
             if documents = instance_variable_get(association.ivar)
-              attrs[association.name] = documents.map { |document| document.to_mongo }
+              if association.one?
+                attrs[association.name] = documents.to_mongo
+              else
+                attrs[association.name] = documents.map { |document| document.to_mongo }
+              end
             end
           end
 
@@ -252,7 +255,7 @@ module MongoMapper
             unless attrs.nil?
               provided_keys = attrs.keys.map { |k| k.to_s }
               unless provided_keys.include?('_id') || provided_keys.include?('id')
-                write_key :_id, Mongo::ObjectID.new
+                write_key :_id, BSON::ObjectID.new
               end
             end
           end
@@ -265,10 +268,17 @@ module MongoMapper
             self.class.key(name) unless respond_to?("#{name}=")
           end
 
+          def set_parent_document(key, value)
+            if key.embeddable? && value.is_a?(key.type)
+              value._parent_document = self
+            end
+          end
+
           def read_key(name)
             if key = keys[name]
               var_name = "@#{name}"
               value = key.get(instance_variable_get(var_name))
+              set_parent_document(key, value)
               instance_variable_set(var_name, value)
             else
               raise KeyNotFound, "Could not find key: #{name.inspect}"
@@ -282,10 +292,7 @@ module MongoMapper
           def write_key(name, value)
             key = keys[name]
 
-            if key.embeddable? && value.is_a?(key.type)
-              value._parent_document = self
-            end
-
+            set_parent_document(key, value)
             instance_variable_set "@#{name}_before_typecast", value
             instance_variable_set "@#{name}", key.set(value)
           end

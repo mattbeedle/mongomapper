@@ -53,6 +53,12 @@ class QueryTest < Test::Unit::TestCase
       criteria[:created_at]['$gt'].should be_utc
     end
 
+    should "work with multiple symbol operators on the same field" do
+      Query.new(Message, :position.gt => 0, :position.lte => 10).criteria.should == {
+        :position => {"$gt" => 0, "$lte" => 10}
+      }
+    end
+
     should "work with simple criteria" do
       Query.new(Room, :foo => 'bar').criteria.should == {
         :foo => 'bar'
@@ -65,34 +71,34 @@ class QueryTest < Test::Unit::TestCase
     end
 
     should "convert id to _id" do
-      id = Mongo::ObjectID.new
+      id = BSON::ObjectID.new
       Query.new(Room, :id => id).criteria.should == {:_id => id}
     end
 
     should "convert id with symbol operator to _id with modifier" do
-      id = Mongo::ObjectID.new
+      id = BSON::ObjectID.new
       Query.new(Room, :id.ne => id).criteria.should == {
         :_id => {'$ne' => id}
       }
     end
 
     should "make sure that _id's are object ids" do
-      id = Mongo::ObjectID.new
+      id = BSON::ObjectID.new
       Query.new(Room, :_id => id.to_s).criteria.should == {:_id => id}
     end
 
     should "work fine with _id's that are object ids" do
-      id = Mongo::ObjectID.new
+      id = BSON::ObjectID.new
       Query.new(Room, :_id => id).criteria.should == {:_id => id}
     end
 
     should "make sure other object id typed keys get converted" do
-      id = Mongo::ObjectID.new
+      id = BSON::ObjectID.new
       Query.new(Message, :room_id => id.to_s).criteria.should == {:room_id => id}
     end
 
     should "work fine with object ids for object id typed keys" do
-      id = Mongo::ObjectID.new
+      id = BSON::ObjectID.new
       Query.new(Message, :room_id => id).criteria.should == {:room_id => id}
     end
 
@@ -152,7 +158,7 @@ class QueryTest < Test::Unit::TestCase
     end
     
     should "make sure that ids in array are object ids" do
-      id1, id2, id3 = Mongo::ObjectID.new, Mongo::ObjectID.new, Mongo::ObjectID.new
+      id1, id2, id3 = BSON::ObjectID.new, BSON::ObjectID.new, BSON::ObjectID.new
       
       Query.new(Room, :_id => [id1.to_s, id2.to_s, id3.to_s]).criteria.should == {
         :_id => {'$in' => [id1, id2, id3]}
@@ -281,6 +287,10 @@ class QueryTest < Test::Unit::TestCase
 
     should "also work with select as array of symbols" do
       Query.new(Room, :select => [:a, :b]).options[:fields].should == [:a, :b]
+    end
+
+    should "work with select as hash" do
+      Query.new(Room, :select => {:a => 0, :b => 1}).options[:fields].should == {:a => 0, :b => 1}
     end
   end
 
