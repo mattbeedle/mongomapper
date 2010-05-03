@@ -1,6 +1,6 @@
 # Make sure you have the following libs in your load path or you could have issues:
 #   gem 'activesupport', '>= 2.3.4'
-#   gem 'mongo', '0.20.1'
+#   gem 'mongo', '1.0'
 #   gem 'jnunemaker-validatable', '1.8.4'
 require 'set'
 require 'uri'
@@ -71,7 +71,7 @@ module MongoMapper
   def self.config_for_environment(environment)
     env = config[environment]
     return env if env['uri'].blank?
-    
+
     uri = URI.parse(env['uri'])
     raise InvalidScheme.new('must be mongodb') unless uri.scheme == 'mongodb'
     {
