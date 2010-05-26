@@ -1,25 +1,26 @@
 # encoding: UTF-8
+require 'forwardable'
 module MongoMapper
   module Plugins
     module Associations
       class Proxy
+        extend Forwardable
+
         alias :proxy_respond_to? :respond_to?
         alias :proxy_extend :extend
 
         instance_methods.each { |m| undef_method m unless m =~ /(^__|^nil\?$|^send$|proxy_|^object_id$)/ }
 
-        attr_reader :owner, :association, :target
+        attr_reader :proxy_owner, :association, :target
 
-        alias :proxy_owner :owner
         alias :proxy_target :target
         alias :proxy_association :association
 
-        delegate :klass, :to => :proxy_association
-        delegate :options, :to => :proxy_association
-        delegate :collection, :to => :klass
+        def_delegators :proxy_association, :klass, :options
+        def_delegator  :klass, :collection
 
         def initialize(owner, association)
-          @owner, @association, @loaded = owner, association, false
+          @proxy_owner, @association, @loaded = owner, association, false
           Array(association.options[:extend]).each { |ext| proxy_extend(ext) }
           reset
         end

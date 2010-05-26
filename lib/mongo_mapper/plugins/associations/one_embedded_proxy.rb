@@ -3,8 +3,6 @@ module MongoMapper
   module Plugins
     module Associations
       class OneEmbeddedProxy < Proxy
-        undef_method :object_id
-
         def build(attributes={})
           @target = klass.new(attributes)
           assign_references(@target)
@@ -34,7 +32,7 @@ module MongoMapper
           end
 
           def assign_references(doc)
-            doc._parent_document = owner
+            doc._parent_document = proxy_owner
           end
       end
     end

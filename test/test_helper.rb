@@ -15,15 +15,11 @@ require 'mocha'
 require 'json'
 require 'pp'
 
-require 'support/custom_matchers'
-
 class Test::Unit::TestCase
-  include CustomMatchers
-
   def Doc(name=nil, &block)
     klass = Class.new do
       include MongoMapper::Document
-      set_collection_name "test#{rand(20)}"
+      set_collection_name :test
 
       if name
         class_eval "def self.name; '#{name}' end"
@@ -55,10 +51,48 @@ class Test::Unit::TestCase
       klass.collection.drop_indexes
     end
   end
+  
+  custom_matcher :be_true do |receiver, matcher, args|
+    matcher.positive_failure_message = "Expected #{receiver} to be true but it wasn't"
+    matcher.negative_failure_message = "Expected #{receiver} not to be true but it was"
+    receiver.eql?(true)
+  end
+
+  custom_matcher :be_false do |receiver, matcher, args|
+    matcher.positive_failure_message = "Expected #{receiver} to be false but it wasn't"
+    matcher.negative_failure_message = "Expected #{receiver} not to be false but it was"
+    receiver.eql?(false)
+  end
+
+  custom_matcher :have_error_on do |receiver, matcher, args|
+    receiver.valid?
+    attribute = args[0]
+    expected_message = args[1]
+
+    if expected_message.nil?
+      matcher.positive_failure_message = "#{receiver} had no errors on #{attribute}"
+      matcher.negative_failure_message = "#{receiver} had errors on #{attribute} #{receiver.errors.inspect}"
+      !receiver.errors.on(attribute).blank?
+    else
+      actual = receiver.errors.on(attribute)
+      matcher.positive_failure_message = %Q(Expected error on #{attribute} to be "#{expected_message}" but was "#{actual}")
+      matcher.negative_failure_message = %Q(Expected error on #{attribute} not to be "#{expected_message}" but was "#{actual}")
+      actual == expected_message
+    end
+  end
+
+  custom_matcher :have_index do |receiver, matcher, args|
+    index_name = args[0]
+    matcher.positive_failure_message = "#{receiver} does not have index named #{index_name}, but should"
+    matcher.negative_failure_message = "#{receiver} does have index named #{index_name}, but should not"
+    !receiver.collection.index_information.detect { |index| index[0] == index_name }.nil?
+  end
 end
 
-test_dir = File.expand_path(File.dirname(__FILE__) + '/../tmp')
-FileUtils.mkdir_p(test_dir) unless File.exist?(test_dir)
+log_dir = File.expand_path('../../log', __FILE__)
+FileUtils.mkdir_p(log_dir) unless File.exist?(log_dir)
+logger = Logger.new(log_dir + '/test.log')
 
-MongoMapper.connection = Mongo::Connection.new('127.0.0.1', 27017, {:logger => Logger.new(test_dir + '/test.log')})
-MongoMapper.database = 'test'
+MongoMapper.connection = Mongo::Connection.new('127.0.0.1', 27017, :logger => logger)
+MongoMapper.database = "mm-test-#{RUBY_VERSION.gsub('.', '-')}"
+MongoMapper.database.collections.each { |c| c.drop_indexes }

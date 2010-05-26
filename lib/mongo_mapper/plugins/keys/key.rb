@@ -17,7 +17,8 @@ module MongoMapper
         end
 
         def embeddable?
-          type.respond_to?(:embeddable?) && type.embeddable? ? true : false
+          return false unless type.respond_to?(:embeddable?)
+          type.embeddable?
         end
 
         def number?
@@ -46,7 +47,7 @@ module MongoMapper
         
         private
           def typecast_class
-            options[:typecast].constantize
+            @typecast_class ||= options[:typecast].constantize
           end
       end
     end

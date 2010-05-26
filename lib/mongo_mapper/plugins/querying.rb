@@ -1,3 +1,4 @@
+# encoding: UTF-8
 module MongoMapper
   module Plugins
     module Querying
@@ -226,9 +227,8 @@ module MongoMapper
           end
 
           def save_to_collection(options={})
-            safe = options[:safe] || false
-            @new = false
-            collection.save(to_mongo, :safe => safe)
+            @_new = false
+            collection.save(to_mongo, :safe => options[:safe])
           end
       end
     end

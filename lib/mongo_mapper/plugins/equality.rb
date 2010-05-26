@@ -3,17 +3,10 @@ module MongoMapper
   module Plugins
     module Equality
       module InstanceMethods
-        def ==(other)
+        def eql?(other)
           other.is_a?(self.class) && _id == other._id
         end
-
-        def eql?(other)
-          self == other
-        end
-
-        def equal?(other)
-          object_id === other.object_id
-        end
+        alias :== :eql?
 
         def hash
           _id.hash

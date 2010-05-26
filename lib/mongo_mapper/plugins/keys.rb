@@ -2,8 +2,6 @@
 module MongoMapper
   module Plugins
     module Keys
-      autoload :Key, 'mongo_mapper/plugins/keys/key'
-
       def self.configure(model)
         model.key :_id, ObjectId
       end
@@ -159,10 +157,10 @@ module MongoMapper
           default_id_value(attrs)
 
           if from_database
-            @new = false
+            @_new = false
             load_from_database(attrs)
           else
-            @new = true
+            @_new = true
             assign(attrs)
           end
         end
@@ -184,24 +182,22 @@ module MongoMapper
         end
 
         def attributes
-          attrs = HashWithIndifferentAccess.new
+          HashWithIndifferentAccess.new.tap do |attrs|
+            keys.each_pair do |name, key|
+              value = key.set(self[key.name])
+              attrs[name] = value
+            end
 
-          keys.each_pair do |name, key|
-            value = key.set(self[key.name])
-            attrs[name] = value
-          end
-
-          embedded_associations.each do |association|
-            if documents = instance_variable_get(association.ivar)
-              if association.one?
-                attrs[association.name] = documents.to_mongo
-              else
-                attrs[association.name] = documents.map { |document| document.to_mongo }
+            embedded_associations.each do |association|
+              if documents = instance_variable_get(association.ivar)
+                if association.one?
+                  attrs[association.name] = documents.to_mongo
+                else
+                  attrs[association.name] = documents.map { |document| document.to_mongo }
+                end
               end
             end
           end
-
-          attrs
         end
         alias :to_mongo :attributes
 
@@ -308,8 +304,6 @@ module MongoMapper
             instance_variable_set :"@#{name}", key.set(value)
           end
       end
-
-
     end
   end
 end
