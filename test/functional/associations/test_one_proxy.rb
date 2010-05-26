@@ -61,15 +61,13 @@ class OneProxyTest < Test::Unit::TestCase
         @post_class.one :author, :class => @author_class
 
         post = @post_class.new
-        author = { 'name' => 'Frank' }
-        post.author = author
+        post.author = {'name' => 'Frank'}
         post.reload
 
         post.author.name.should == 'Frank'
         post.author.nil?.should be_false
 
-        new_author = { 'name' => 'Emily' }
-        post.author = new_author
+        post.author = {'name' => 'Emily'}
         post.author.name.should == 'Emily'
       end
     end
@@ -87,7 +85,7 @@ class OneProxyTest < Test::Unit::TestCase
 
   should "work with criteria" do
     @post_class.one :primary_author, :class => @author_class, :primary => true
-    @post_class.one :author, :class => @author_class
+    @post_class.one :author, :class => @author_class, :primary => false
 
     post = @post_class.create
     author = @author_class.create(:name => 'Frank', :primary => false, :post_id => post.id)

@@ -65,6 +65,16 @@ class KeyTest < Test::Unit::TestCase
     end
   end
 
+  context ".load" do
+    setup do
+      @klass = Doc()
+    end
+
+    should "return nil if argument is nil" do
+      @klass.load(nil).should be_nil
+    end
+  end
+
   context "Initializing a new key" do
     should "allow setting the name" do
       Key.new(:foo, String).name.should == 'foo'
@@ -139,6 +149,26 @@ class KeyTest < Test::Unit::TestCase
 
     should "know if it is not a number" do
       Key.new(:age, String).number?.should be_false
+    end
+  end
+
+  context "for an array with :typecast option" do
+    setup   { @key = Key.new(:user_ids, Array, :typecast => 'ObjectId') }
+    subject { @key }
+    
+    should "cast each element correctly" do
+      ids = [BSON::ObjectID.new, BSON::ObjectID.new, BSON::ObjectID.new.to_s, BSON::ObjectID.new.to_s]
+      subject.set(ids).should == ids.map { |id| ObjectId.to_mongo(id) }
+    end
+  end
+
+  context "for a set with :typecast option" do
+    setup   { @key = Key.new(:user_ids, Set, :typecast => 'ObjectId') }
+    subject { @key }
+    
+    should "cast each element correctly" do
+      ids = [BSON::ObjectID.new, BSON::ObjectID.new, BSON::ObjectID.new.to_s, BSON::ObjectID.new.to_s]
+      subject.set(ids).should == ids.map { |id| ObjectId.to_mongo(id) }
     end
   end
 

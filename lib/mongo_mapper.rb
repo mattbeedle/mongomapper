@@ -1,10 +1,8 @@
-# Make sure you have the following libs in your load path or you could have issues:
-#   gem 'activesupport', '>= 2.3.4'
-#   gem 'mongo', '1.0'
-#   gem 'jnunemaker-validatable', '1.8.4'
+# encoding: UTF-8
+# Make sure you have the correct versions of the gems (see gemspec) in your load path.
 require 'set'
 require 'uri'
-require 'mongo'
+require 'plucky'
 require 'validatable'
 require 'active_support/all'
 
@@ -92,8 +90,7 @@ module MongoMapper
   end
 
   def self.setup(config, environment, options={})
-    using_passenger = options.delete(:passenger)
-    handle_passenger_forking if using_passenger
+    handle_passenger_forking
     self.config = config
     connect(environment, options)
   end
@@ -106,11 +103,12 @@ module MongoMapper
     end
   end
 
-  autoload :Query,            'mongo_mapper/query'
   autoload :Document,         'mongo_mapper/document'
   autoload :EmbeddedDocument, 'mongo_mapper/embedded_document'
+  autoload :Query,            'mongo_mapper/query'
   autoload :Version,          'mongo_mapper/version'
 end
 
+require 'mongo_mapper/extensions'
 require 'mongo_mapper/support'
 require 'mongo_mapper/plugins'

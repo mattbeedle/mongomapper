@@ -1,8 +1,9 @@
+# encoding: UTF-8
 module MongoMapper
   module Plugins
     module Associations
       class ManyDocumentsProxy < Collection
-        include Support::Find
+        include MongoMapper::Plugins::DynamicQuerying::ClassMethods
 
         def find(*args)
           options = args.extract_options!
@@ -82,14 +83,13 @@ module MongoMapper
         end
 
         def nullify
-          criteria = Query.new(klass, scoped_conditions).criteria
-          all(criteria).each do |doc|
+          all.each do |doc|
             doc.update_attributes(self.foreign_key => nil)
           end
           reset
         end
 
-        def save_to_collection(options = {})
+        def save_to_collection(options={})
           @target.each { |doc| doc.save(options) } if @target
         end
 

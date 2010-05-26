@@ -1,3 +1,4 @@
+# encoding: UTF-8
 module MongoMapper
   module Support
     module DescendantAppends
@@ -14,9 +15,7 @@ module MongoMapper
 
       # @api public
       def append_extensions(*extensions)
-        extra_extensions.concat extensions
-
-        # Add the extension to existing descendants
+        extra_extensions.concat(extensions)
         descendants.each do |model|
           extensions.each { |extension| model.extend(extension) }
         end
@@ -24,9 +23,7 @@ module MongoMapper
 
       # @api public
       def append_inclusions(*inclusions)
-        extra_inclusions.concat inclusions
-
-        # Add the inclusion to existing descendants
+        extra_inclusions.concat(inclusions)
         descendants.each do |model|
           inclusions.each { |inclusion| model.send(:include, inclusion) }
         end

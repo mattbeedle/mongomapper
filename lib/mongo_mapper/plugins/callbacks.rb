@@ -1,3 +1,4 @@
+# encoding: UTF-8
 # Almost all of this callback stuff is pulled directly from ActiveSupport
 # in the interest of support rails 2 and 3 at the same time and is the
 # same copyright as rails.
@@ -76,7 +77,7 @@ module MongoMapper
           result
         end
 
-        def run_callbacks(kind, options = {}, &block)
+        def run_callbacks(kind, options={}, &block)
           callback_chain_method = "#{kind}_callback_chain"
           return unless self.class.respond_to?(callback_chain_method)
           self.class.send(callback_chain_method).run(self, options, &block)
@@ -122,7 +123,7 @@ module MongoMapper
           new(methods)
         end
 
-        def run(object, options = {}, &terminator)
+        def run(object, options={}, &terminator)
           enumerator = options[:enumerator] || :each
 
           unless block_given?
@@ -169,7 +170,7 @@ module MongoMapper
       class Callback
         attr_reader :kind, :method, :identifier, :options
 
-        def initialize(kind, method, options = {})
+        def initialize(kind, method, options={})
           @kind       = kind
           @method     = method
           @identifier = options[:identifier]

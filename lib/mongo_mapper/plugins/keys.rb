@@ -1,3 +1,4 @@
+# encoding: UTF-8
 module MongoMapper
   module Plugins
     module Keys
@@ -9,7 +10,6 @@ module MongoMapper
 
       module ClassMethods
         def inherited(descendant)
-          key :_type, String unless keys.keys.include?(:_type)
           descendant.instance_variable_set(:@keys, keys.dup)
           super
         end
@@ -36,9 +36,12 @@ module MongoMapper
           object_id_key?(:_id)
         end
 
+        def object_id_keys
+          keys.keys.select { |key| keys[key].type == ObjectId }.map(&:to_sym)
+        end
+
         def object_id_key?(name)
-          key = keys[name.to_s]
-          key && key.type == ObjectId
+          object_id_keys.include?(name.to_sym)
         end
 
         def to_mongo(instance)
@@ -53,6 +56,7 @@ module MongoMapper
 
         # load is overridden in identity map to ensure same objects are loaded
         def load(attrs)
+          return nil if attrs.nil?
           begin
             klass = attrs['_type'].present? ? attrs['_type'].constantize : self
             klass.new(attrs, true)
@@ -161,8 +165,6 @@ module MongoMapper
             @new = true
             assign(attrs)
           end
-
-          assign_type
         end
 
         def persisted?
@@ -273,10 +275,6 @@ module MongoMapper
                 write_key :_id, BSON::ObjectID.new
               end
             end
-          end
-
-          def assign_type
-            self._type = self.class.name if respond_to?(:_type=)
           end
 
           def ensure_key_exists(name)
